@@ -43,7 +43,7 @@ def get_container_ram_stats():
     cgroup_usage_file = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
     
     container_mb = process_mb
-    max_mb = 1024.0  # 1 GB baseline
+    max_mb = 1024.0
     
     if os.path.exists(cgroup_usage_file) and os.path.exists(cgroup_limit_file):
         try:
@@ -204,47 +204,18 @@ st.markdown("""
         min-height: 40px !important;
         border: 1px solid rgba(255, 255, 255, 0.12) !important;
     }
-    .guide-card {
-        background-color: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: clamp(12px, 2vw, 18px);
-        margin-bottom: 14px;
-        font-size: clamp(13px, 1vw + 1px, 15px);
+    .legal-card {
+        background-color: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 12px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: #FCA5A5;
     }
-    .guide-step {
-        display: flex;
-        align-items: flex-start;
-        margin-bottom: 10px;
-    }
-    .step-badge {
-        background-color: #EF4444;
-        color: #FFFFFF;
-        font-weight: bold;
-        border-radius: 50%;
-        min-width: 26px;
-        height: 26px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 12px;
-        font-size: 13px;
-        flex-shrink: 0;
-    }
-    @media (max-width: 768px) {
-        .block-container {
-            padding-top: 1.5rem !important;
-            padding-bottom: 1.5rem !important;
-        }
-        .app-title-wrapper {
-            margin: 0.1rem 0 0.85rem 0;
-        }
-        div[data-testid="stMetricValue"] {
-            font-size: 1.45rem !important;
-        }
-        div[data-testid="stMetricLabel"] {
-            font-size: 0.78rem !important;
-        }
+    .legal-card strong {
+        color: #EF4444;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -354,26 +325,49 @@ with st.sidebar.expander("🖥️ Container Resources", expanded=False):
         st.rerun()
 
 # ---------------------------------------------------------
-# DATA & PLATFORM INGESTION
+# DATA & PLATFORM INGESTION (LEGALLY PROTECTED)
 # ---------------------------------------------------------
 with st.sidebar.expander("💾 Data & Platform", expanded=True):
-    uploaded = st.file_uploader(
-        "Upload Files (CSV, Excel, JSON)", 
-        type=["csv", "xlsx", "xls", "json"], 
-        accept_multiple_files=True,
-        help="Select streaming history files or spreadsheets. Processed in volatile memory only."
-    )
-    gsheet = st.text_input(
-        "Public Google Sheet URL", 
-        placeholder="https://docs.google.com/spreadsheets/d/...",
-        help="Enter a public Google Sheets sharing link. First sheet will be fetched via secure HTTPS."
+    # LEGAL DISCLAIMER & MANDATORY USER ACKNOWLEDGMENT GATE
+    st.markdown("""
+    <div class="legal-card">
+        <strong>⚠️ NOTICE & PRIVACY DISCLAIMER:</strong><br>
+        Do <strong>NOT</strong> upload sensitive, proprietary, confidential, or legally protected data. 
+        This includes <strong>Protected Health Information (PHI)</strong> under HIPAA, financial/banking details, 
+        social security numbers, passwords, or classified material.<br><br>
+        This utility is provided <em>"AS IS"</em> without warranty of any kind. This application is <strong>not a HIPAA Covered Entity or Business Associate</strong>. 
+        By uploading data, you confirm that your files contain exclusively public or non-sensitive personal records and agree to hold harmless and indemnify the project owner from any liability, damages, or regulatory violations.
+    </div>
+    """, unsafe_allow_html=True)
+
+    terms_accepted = st.checkbox(
+        "I certify that my files contain NO sensitive data, PHI (HIPAA), or confidential info, and accept these terms.",
+        value=False,
+        key="legal_acknowledgment"
     )
 
-    if st.button("🗑️ Reset Session & Clear Data", use_container_width=True, help="Immediately releases all memory structures and resets the view."):
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-        gc.collect()
-        st.rerun()
+    if not terms_accepted:
+        st.info("🔒 Ingestion disabled. Acknowledge the disclaimer above to upload files.")
+        uploaded = None
+        gsheet = ""
+    else:
+        uploaded = st.file_uploader(
+            "Upload Files (CSV, Excel, JSON)", 
+            type=["csv", "xlsx", "xls", "json"], 
+            accept_multiple_files=True,
+            help="Select streaming history files or spreadsheets. Processed in volatile memory only."
+        )
+        gsheet = st.text_input(
+            "Public Google Sheet URL", 
+            placeholder="https://docs.google.com/spreadsheets/d/...",
+            help="Enter a public Google Sheets sharing link. First sheet will be fetched via secure HTTPS."
+        )
+
+        if st.button("🗑️ Reset Session & Clear Data", use_container_width=True, help="Immediately releases all memory structures and resets the view."):
+            for k in list(st.session_state.keys()):
+                del st.session_state[k]
+            gc.collect()
+            st.rerun()
 
     def validate_gsheet_url(url: str) -> bool:
         if not url:
@@ -429,7 +423,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             return "Pandora"
         return None
 
-    detected_platform = inspect_header_signature(uploaded, gsheet)
+    detected_platform = inspect_header_signature(uploaded, gsheet) if terms_accepted else None
     profile_names = list(DATASET_PROFILES.keys())
     active_idx = profile_names.index(detected_platform) if detected_platform in profile_names else profile_names.index("Other")
 
