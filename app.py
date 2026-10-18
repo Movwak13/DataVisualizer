@@ -305,24 +305,6 @@ chart_bg = "#111827" if export_theme == "Dark Canvas" else "#FFFFFF"
 chart_text = "#E5E7EB" if export_theme == "Dark Canvas" else "#111827"
 chart_grid = "#1F2937" if export_theme == "Dark Canvas" else "#E5E7EB"
 
-# ---------------------------------------------------------
-# CONTAINER RESOURCE MONITOR
-# ---------------------------------------------------------
-ram_stats = get_container_ram_stats()
-with st.sidebar.expander("🖥️ Container Resources", expanded=False):
-    if ram_stats["container_mb"] > 800:
-        st.error(f"⚠️ High Memory: {ram_stats['container_mb']:.1f} MB / {ram_stats['max_mb']:.0f} MB")
-    elif ram_stats["container_mb"] > 600:
-        st.warning(f"⚡ Moderate: {ram_stats['container_mb']:.1f} MB / {ram_stats['max_mb']:.0f} MB")
-    else:
-        st.success(f"🟢 Normal: {ram_stats['container_mb']:.1f} MB / {ram_stats['max_mb']:.0f} MB")
-
-    st.progress(ram_stats["pct_used"] / 100.0)
-    st.caption(f"Process RAM: **{ram_stats['process_mb']:.1f} MB** ({ram_stats['pct_used']:.1f}%)")
-
-    if st.button("🧹 Force Garbage Collection", use_container_width=True):
-        gc.collect()
-        st.rerun()
 
 # ---------------------------------------------------------
 # DATA & PLATFORM INGESTION (LEGALLY PROTECTED)
@@ -1301,3 +1283,4 @@ with t_catalog:
         key=f"dl_{clean_export_name}",
         help="Download the filtered catalog table as a sanitized CSV file."
     )
+
