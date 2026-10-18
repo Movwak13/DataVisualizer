@@ -523,24 +523,25 @@ def parse_gsheet_url(url: str):
 
 def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True):
     frames = []
-        if uploaded_files:
-            for f in uploaded_files:
-                if hasattr(f, 'size') and f.size > MAX_FILE_BYTES:
-                    st.error(f"File exceeds maximum allowed size ({MAX_FILE_BYTES // (1024*1024)} MB).")
-                    continue
-                try:
-                    f.seek(0)
-                    fn = f.name.lower()
-                    if fn.endswith('.csv'):
-                        frames.append(pd.read_csv(f))
-                    elif fn.endswith(('.xlsx', '.xls')):
-                        frames.append(pd.read_excel(f))
-                    elif fn.endswith('.json'):
-                        c = json.load(f)
-                        c = clean_raw_json_obj(c)
-                        frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
-                except Exception as e:
-                    log_error("File Parsing", e, "A file could not be parsed.")
+    if uploaded_files:
+        for f in uploaded_files:
+            if hasattr(f, 'size') and f.size > MAX_FILE_BYTES:
+                st.error(f"File exceeds maximum allowed size ({MAX_FILE_BYTES // (1024*1024)} MB).")
+                continue
+            try:
+                f.seek(0)
+                fn = f.name.lower()
+                if fn.endswith('.csv'):
+                    frames.append(pd.read_csv(f))
+                elif fn.endswith(('.xlsx', '.xls')):
+                    frames.append(pd.read_excel(f))
+                elif fn.endswith('.json'):
+                    c = json.load(f)
+                    c = clean_raw_json_obj(c)
+                    frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
+            except Exception as e:
+                log_error("File Parsing", e, "A file could not be parsed.")
+    if gsheet_url and validate_gsheet_url(gsheet_url):
     if gsheet_url and validate_gsheet_url(gsheet_url):
         try:
             frames.append(parse_gsheet_url(gsheet_url.strip()))
