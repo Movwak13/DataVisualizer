@@ -440,12 +440,10 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
                 if fn.endswith('.csv'):
                     cols_found.update(pd.read_csv(first_file, nrows=2).columns)
                 elif fn.endswith(('.xlsx', '.xls')):
-                    cols_found.update(pd.read_excel(first_file, nrows=2).columns)
-                elif fn.endswith('.json'):
-                    content = json.load(first_file)
-                    df_sample = pd.json_normalize(content[:2] if isinstance(content, list) else [content])
-                    cols_found.update(df_sample.columns)
-                first_file.seek(0)
+                    cols_found.update(pd.read_excel(first_file, nrows=2).columns)                elif fn.endswith('.json'): 
+                    c = json.load(f)
+                    c = clean_raw_json_obj(c)
+                    frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
             except Exception as e:
                 logger.warning(f"Signature detection read issue: {type(e).__name__}")
 
@@ -535,11 +533,10 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
                 if fn.endswith('.csv'): 
                     frames.append(pd.read_csv(f))
                 elif fn.endswith(('.xlsx', '.xls')): 
-                    frames.append(pd.read_excel(f))
-                elif fn.endswith('.json'): 
+                    frames.append(pd.read_excel(f))                elif fn.endswith('.json'): 
                     c = json.load(f)
-c = clean_raw_json_obj(c)
-frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
+                    c = clean_raw_json_obj(c)
+                    frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
             except Exception as e:
                 log_error("File Parsing", e, "A file could not be parsed.")
     if gsheet_url and validate_gsheet_url(gsheet_url):
