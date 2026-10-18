@@ -418,7 +418,6 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
                     del st.session_state[k]
             gc.collect()
             st.rerun()
-
     def validate_gsheet_url(url: str) -> bool:
         if not url:
             return False
@@ -426,7 +425,9 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         parsed = urlparse(clean_url)
         if parsed.scheme != "https" or parsed.netloc != "docs.google.com":
             return False
-        return bool(re.match(r"^/spreadsheets/d/([a-zA-Z0-9-_]+)", parsed.path))    def inspect_header_signature(uploaded_files, gsheet_url):
+        return bool(re.match(r"^/spreadsheets/d/([a-zA-Z0-9-_]+)", parsed.path))
+
+    def inspect_header_signature(uploaded_files, gsheet_url):
         cols_found = set()
         if uploaded_files:
             first_file = uploaded_files[0]
@@ -452,7 +453,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
                 m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", gsheet_url.strip())
                 if m:
                     res = requests.get(
-                        f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid=0", 
+                        f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid=0",
                         timeout=5,
                         allow_redirects=False,
                         headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"}
