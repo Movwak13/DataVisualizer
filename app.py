@@ -8,6 +8,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import requests
+import psutil
 
 # ---------------------------------------------------------
 # LOGGING & ENVIRONMENT INITIALIZATION
@@ -33,6 +34,34 @@ if not logger.handlers:
 def log_error(context: str, exc: Exception, user_msg: str):
     logger.error(f"Error in {context}: {type(exc).__name__}: {str(exc)}\n{traceback.format_exc()}")
     st.sidebar.error(f"⚠️ {user_msg}")
+
+def get_container_ram_stats():
+    process = psutil.Process(os.getpid())
+    process_mb = process.memory_info().rss / (1024 * 1024)
+
+    cgroup_limit_file = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+    cgroup_usage_file = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
+    
+    container_mb = process_mb
+    max_mb = 1024.0  # 1 GB baseline
+    
+    if os.path.exists(cgroup_usage_file) and os.path.exists(cgroup_limit_file):
+        try:
+            with open(cgroup_usage_file, "r") as f:
+                container_mb = int(f.read().strip()) / (1024 * 1024)
+            with open(cgroup_limit_file, "r") as f:
+                raw_limit = int(f.read().strip())
+                if raw_limit < (100 * 1024 * 1024 * 1024):
+                    max_mb = raw_limit / (1024 * 1024)
+        except Exception:
+            container_mb = process_mb
+
+    return {
+        "process_mb": process_mb,
+        "container_mb": container_mb,
+        "max_mb": max_mb,
+        "pct_used": min(100.0, (container_mb / max_mb) * 100.0)
+    }
 
 @st.cache_data(ttl=3600)
 def load_config():
@@ -306,6 +335,25 @@ chart_text = "#E5E7EB" if export_theme == "Dark Canvas" else "#111827"
 chart_grid = "#1F2937" if export_theme == "Dark Canvas" else "#E5E7EB"
 
 # ---------------------------------------------------------
+# CONTAINER RESOURCE MONITOR
+# ---------------------------------------------------------
+ram_stats = get_container_ram_stats()
+with st.sidebar.expander("🖥️ Container Resources", expanded=False):
+    if ram_stats["container_mb"] > 800:
+        st.error(f"⚠️ High Memory: {ram_stats['container_mb']:.1f} MB / {ram_stats['max_mb']:.0f} MB")
+    elif ram_stats["container_mb"] > 600:
+        st.warning(f"⚡ Moderate: {ram_stats['container_mb']:.1f} MB / {ram_stats['max_mb']:.0f} MB")
+    else:
+        st.success(f"🟢 Normal: {ram_stats['container_mb']:.1f} MB / {ram_stats['max_mb']:.0f} MB")
+
+    st.progress(ram_stats["pct_used"] / 100.0)
+    st.caption(f"Process RAM: **{ram_stats['process_mb']:.1f} MB** ({ram_stats['pct_used']:.1f}%)")
+
+    if st.button("🧹 Force Garbage Collection", use_container_width=True):
+        gc.collect()
+        st.rerun()
+
+# ---------------------------------------------------------
 # DATA & PLATFORM INGESTION
 # ---------------------------------------------------------
 with st.sidebar.expander("💾 Data & Platform", expanded=True):
@@ -399,7 +447,6 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
 # OPTIMIZED VECTORIZED SANITIZATION & SAFE EXPORT
 # ---------------------------------------------------------
 def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
-    # High-performance vectorized anti-formula injection
     df_copy = df_in.copy()
     injection_pattern = r"^[\=\+\-\@\t\r]"
     for col in df_copy.select_dtypes(include=['object', 'string', 'category']).columns:
@@ -557,7 +604,6 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
             "avg_tracks_per_session": 0.0
         }
 
-    # Vectorized fast integer second diff
     epoch_seconds = active_ts.view('int64') // 10**9
     time_gaps_min = np.diff(epoch_seconds) / 60.0
     session_cuts = np.where(time_gaps_min > session_idle_minutes)[0]
@@ -703,7 +749,9 @@ if df.empty:
     st.warning("No records ingested. Check format and contents.")
     st.stop()
 
-# Optimized scalar date boundary lookup (avoids re-parsing series)
+post_ingest_ram = get_container_ram_stats()
+logger.info(f"Ingestion complete: {len(df):,} rows. Process RAM: {post_ingest_ram['process_mb']:.1f} MB | Container RAM: {post_ingest_ram['container_mb']:.1f} MB")
+
 dt_col = next((c for c in df.columns if c.endswith('_dt')), None)
 if dt_col:
     d_start_val = df[dt_col].min().date()
@@ -807,7 +855,6 @@ def render_export_bar(fig, table_df, base_name, total_rows=20):
         )
     with c2:
         try:
-            # Low-overhead layout clone (avoids full JSON traversal)
             export_fig = go.Figure(fig)
             export_fig.update_layout(
                 paper_bgcolor=chart_bg, plot_bgcolor=chart_bg,
@@ -1010,8 +1057,6 @@ with t_breakdown:
                 st.markdown(f"<div style='margin-top: 26px; font-size: 14px; color: #94A3B8;'><b>Preset Active:</b> Showing {direction_label.lower()} {top_n} {group_col}s</div>", unsafe_allow_html=True)
 
     available_slice_dims = [c for c in ordered_cat_cols if c != group_col]
-    
-    # Fast unified boolean mask filter
     mask = np.ones(len(df), dtype=bool)
 
     if available_slice_dims:
