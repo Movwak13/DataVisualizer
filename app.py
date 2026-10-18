@@ -426,9 +426,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         parsed = urlparse(clean_url)
         if parsed.scheme != "https" or parsed.netloc != "docs.google.com":
             return False
-        return bool(re.match(r"^/spreadsheets/d/([a-zA-Z0-9-_]+)", parsed.path))
-
-    def inspect_header_signature(uploaded_files, gsheet_url):
+        return bool(re.match(r"^/spreadsheets/d/([a-zA-Z0-9-_]+)", parsed.path))    def inspect_header_signature(uploaded_files, gsheet_url):
         cols_found = set()
         if uploaded_files:
             first_file = uploaded_files[0]
@@ -437,14 +435,15 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             try:
                 first_file.seek(0)
                 fn = first_file.name.lower()
-                                if fn.endswith('.csv'): 
-                    frames.append(pd.read_csv(f))
-                elif fn.endswith(('.xlsx', '.xls')): 
-                    frames.append(pd.read_excel(f))
-                elif fn.endswith('.json'): 
-                    c = json.load(f)
-                    c = clean_raw_json_obj(c)
-                    frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
+                if fn.endswith('.csv'):
+                    cols_found.update(pd.read_csv(first_file, nrows=2).columns)
+                elif fn.endswith(('.xlsx', '.xls')):
+                    cols_found.update(pd.read_excel(first_file, nrows=2).columns)
+                elif fn.endswith('.json'):
+                    content_json = json.load(first_file)
+                    df_sample = pd.json_normalize(content_json[:2] if isinstance(content_json, list) else [content_json])
+                    cols_found.update(df_sample.columns)
+                first_file.seek(0)
             except Exception as e:
                 logger.warning(f"Signature detection read issue: {type(e).__name__}")
 
@@ -523,24 +522,24 @@ def parse_gsheet_url(url: str):
 
 def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True):
     frames = []
-    if uploaded_files:
-        for f in uploaded_files:
-            if hasattr(f, 'size') and f.size > MAX_FILE_BYTES:
-                st.error(f"File exceeds maximum allowed size ({MAX_FILE_BYTES // (1024*1024)} MB).")
-                continue
-            try:
-                f.seek(0)
-                fn = f.name.lower()
-                                if fn.endswith('.csv'): 
-                    frames.append(pd.read_csv(f))
-                elif fn.endswith(('.xlsx', '.xls')): 
-                    frames.append(pd.read_excel(f))
-                elif fn.endswith('.json'): 
-                    c = json.load(f)
-                    c = clean_raw_json_obj(c)
-                    frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
-            except Exception as e:
-                log_error("File Parsing", e, "A file could not be parsed.")
+        if uploaded_files:
+            for f in uploaded_files:
+                if hasattr(f, 'size') and f.size > MAX_FILE_BYTES:
+                    st.error(f"File exceeds maximum allowed size ({MAX_FILE_BYTES // (1024*1024)} MB).")
+                    continue
+                try:
+                    f.seek(0)
+                    fn = f.name.lower()
+                    if fn.endswith('.csv'):
+                        frames.append(pd.read_csv(f))
+                    elif fn.endswith(('.xlsx', '.xls')):
+                        frames.append(pd.read_excel(f))
+                    elif fn.endswith('.json'):
+                        c = json.load(f)
+                        c = clean_raw_json_obj(c)
+                        frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
+                except Exception as e:
+                    log_error("File Parsing", e, "A file could not be parsed.")
     if gsheet_url and validate_gsheet_url(gsheet_url):
         try:
             frames.append(parse_gsheet_url(gsheet_url.strip()))
