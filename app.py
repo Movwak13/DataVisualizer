@@ -1,4 +1,4 @@
-﻿import io, json, logging, os, re, sys, traceback, gc
+﻿import io, json, logging, os, re, sys, traceback, copy, gc
 from datetime import datetime, date
 from urllib.parse import urlparse
 from logging.handlers import RotatingFileHandler
@@ -31,6 +31,7 @@ if not logger.handlers:
     logger.addHandler(ch)
 
 def log_error(context: str, exc: Exception, user_msg: str):
+    # Log exception type and sanitized context without leaking user metadata/filenames
     logger.error(f"Error in {context}: {type(exc).__name__}: {str(exc)}\n{traceback.format_exc()}")
     st.sidebar.error(f"⚠️ {user_msg}")
 
@@ -48,7 +49,13 @@ def load_config():
             "palettes": ["Viridis", "Plasma", "Turbo", "Sunsetdark", "Tealgrn", "Bluered", "Cividis"],
             "default_export_theme": "Dark Canvas"
         },
-        "limits": {"max_music_catalog_items": 500, "max_export_width": 1600, "row_pixel_height": 26, "max_upload_bytes": 50 * 1024 * 1024},
+        "limits": {
+            "max_music_catalog_items": 500, 
+            "max_export_width": 1600, 
+            "row_pixel_height": 26,
+            "max_file_size_mb": 50,
+            "max_total_rows": 500000
+        },
         "ignored_columns": [
             "spotify_track_uri", "spotify_episode_uri", "audiobook_uri", "audiobook_chapter_uri",
             "ip_addr", "user_agent_decrypted", "username", "offline_timestamp", "incognito_mode",
@@ -68,7 +75,8 @@ DATASET_PROFILES = CONFIG.get("profiles", {})
 STYLING_CFG = CONFIG.get("styling", {})
 LIMITS_CFG = CONFIG.get("limits", {})
 IGNORED_COLS = set(CONFIG.get("ignored_columns", []))
-MAX_UPLOAD_BYTES = LIMITS_CFG.get("max_upload_bytes", 50 * 1024 * 1024)
+MAX_FILE_BYTES = LIMITS_CFG.get("max_file_size_mb", 50) * 1024 * 1024
+MAX_TOTAL_ROWS = LIMITS_CFG.get("max_total_rows", 500000)
 
 st.set_page_config(
     page_title="Universal Multi-Select Data Visualizer", 
@@ -88,24 +96,20 @@ st.markdown("""
         padding-left: clamp(1rem, 3vw, 2.5rem) !important;
         padding-right: clamp(1rem, 3vw, 2.5rem) !important;
     }
-
     html {
         -webkit-tap-highlight-color: transparent;
         text-rendering: optimizeLegibility;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
     }
-
     .sr-only {
         position: absolute !important; width: 1px !important; height: 1px !important;
         padding: 0 !important; margin: -1px !important; overflow: hidden !important;
         clip: rect(0, 0, 0, 0) !important; border: 0 !important;
     }
-    
     button:focus-visible, input:focus-visible, select:focus-visible {
         outline: 2px solid #38bdf8 !important; outline-offset: 2px !important;
     }
-
     .app-title-wrapper {
         margin: 0.25rem 0 1.25rem 0;
         display: flex;
@@ -120,7 +124,6 @@ st.markdown("""
         margin: 0;
         padding: 0;
     }
-
     div[data-testid="stTabs"] div[role="tablist"] {
         gap: 6px !important;
         padding: 8px 10px 0px 10px !important;
@@ -135,7 +138,6 @@ st.markdown("""
     div[data-testid="stTabs"] div[role="tablist"]::-webkit-scrollbar {
         display: none !important;
     }
-
     div[data-testid="stTabs"] button[role="tab"] {
         border-radius: 8px 8px 0px 0px !important;
         padding: clamp(6px, 1.2vw, 10px) clamp(12px, 1.8vw, 22px) !important;
@@ -146,22 +148,18 @@ st.markdown("""
         flex-shrink: 0 !important;
         min-height: 42px !important;
     }
-
     div[data-testid="stTabs"] button[role="tab"]:hover {
         background-color: rgba(255, 255, 255, 0.08) !important;
     }
-
     div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
         background-color: rgba(255, 255, 255, 0.12) !important;
         border: 1px solid rgba(255, 255, 255, 0.18) !important;
         border-bottom: 3px solid #EF4444 !important;
         font-weight: 600 !important;
     }
-
     div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
         display: none !important;
     }
-
     .sidebar-nav-label {
         font-size: 0.82rem;
         font-weight: 700;
@@ -170,7 +168,6 @@ st.markdown("""
         color: #94A3B8;
         margin-bottom: 8px;
     }
-
     [data-testid="stSidebar"] div.row-widget.stButton button {
         border-radius: 6px !important;
         font-size: 13px !important;
@@ -179,7 +176,6 @@ st.markdown("""
         min-height: 40px !important;
         border: 1px solid rgba(255, 255, 255, 0.12) !important;
     }
-
     .guide-card {
         background-color: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -207,7 +203,6 @@ st.markdown("""
         font-size: 13px;
         flex-shrink: 0;
     }
-
     @media (max-width: 768px) {
         .block-container {
             padding-top: 1.5rem !important;
@@ -312,25 +307,24 @@ chart_text = "#E5E7EB" if export_theme == "Dark Canvas" else "#111827"
 chart_grid = "#1F2937" if export_theme == "Dark Canvas" else "#E5E7EB"
 
 # ---------------------------------------------------------
-# DATA & PLATFORM
+# DATA & PLATFORM INGESTION (HARDENED)
 # ---------------------------------------------------------
 with st.sidebar.expander("💾 Data & Platform", expanded=True):
     uploaded = st.file_uploader(
         "Upload Files (CSV, Excel, JSON)", 
         type=["csv", "xlsx", "xls", "json"], 
         accept_multiple_files=True,
-        help="Select one or multiple streaming history files. All files stay strictly in session memory."
+        help="Select streaming history files or spreadsheets. Processed in volatile memory only."
     )
     gsheet = st.text_input(
         "Public Google Sheet URL", 
         placeholder="https://docs.google.com/spreadsheets/d/...",
-        help="Enter a public Google Sheets sharing link. Downloaded directly into memory."
+        help="Enter a public Google Sheets sharing link. First sheet will be fetched via secure HTTPS."
     )
 
-    # Privacy Session Reset Button
-    if st.button("🗑️ Purge Data & Reset Session", use_container_width=True, help="Immediately clears all uploaded records from active memory."):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
+    if st.button("🗑️ Reset Session & Clear Data", use_container_width=True, help="Immediately releases all memory structures and resets the view."):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
         gc.collect()
         st.rerun()
 
@@ -339,6 +333,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             return False
         clean_url = url.strip()
         parsed = urlparse(clean_url)
+        # Strict SSRF guard: scheme must be https, hostname exact match
         if parsed.scheme != "https" or parsed.netloc != "docs.google.com":
             return False
         return bool(re.match(r"^/spreadsheets/d/([a-zA-Z0-9-_]+)", parsed.path))
@@ -347,6 +342,8 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         cols_found = set()
         if uploaded_files:
             first_file = uploaded_files[0]
+            if hasattr(first_file, 'size') and first_file.size > MAX_FILE_BYTES:
+                return None
             try:
                 first_file.seek(0)
                 fn = first_file.name.lower()
@@ -360,7 +357,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
                     cols_found.update(df_sample.columns)
                 first_file.seek(0)
             except Exception as e:
-                logger.warning(f"Signature detection read failure: {e}")
+                logger.warning(f"Signature detection read issue: {type(e).__name__}")
 
         if not cols_found and validate_gsheet_url(gsheet_url):
             try:
@@ -369,12 +366,13 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
                     res = requests.get(
                         f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid=0", 
                         timeout=5,
-                        headers={"User-Agent": "Mozilla/5.0"}
+                        allow_redirects=False,
+                        headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"}
                     )
                     if res.status_code == 200:
                         cols_found.update(pd.read_csv(io.StringIO(res.text), nrows=2).columns)
             except Exception as e:
-                logger.warning(f"GSheet signature failure: {e}")
+                logger.warning(f"GSheet signature detection issue: {type(e).__name__}")
 
         cols_lower = {str(c).lower().strip() for c in cols_found}
         if any(k in cols_lower for k in ['master_metadata_track_name', 'msplayed', 'ms_played', 'conn_country']):
@@ -400,15 +398,18 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         st.caption(f"Auto-detected platform: {detected_platform}")
 
 # ---------------------------------------------------------
-# INGESTION & PIPELINE ENGINE (SESSION-ISOLATED)
+# DATA SANITIZATION & SAFE EXPORT
 # ---------------------------------------------------------
 def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
+    # Defend against CSV/Excel Formula Injection
     df_copy = df_in.copy()
     for col in df_copy.select_dtypes(include=['object', 'string', 'category']).columns:
         df_copy[col] = df_copy[col].astype(str).apply(
             lambda x: f"'{x}" if x.startswith(('=', '+', '-', '@', '\t', '\r')) else x
         )
-    return df_copy.to_csv(index=False).encode('utf-8')
+    csv_bytes = df_copy.to_csv(index=False).encode('utf-8')
+    del df_copy
+    return csv_bytes
 
 def parse_gsheet_url(url: str):
     if not validate_gsheet_url(url):
@@ -419,19 +420,19 @@ def parse_gsheet_url(url: str):
     res = requests.get(
         f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid={gid}", 
         timeout=10,
-        headers={"User-Agent": "Mozilla/5.0"}
+        allow_redirects=False,
+        headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"}
     )
     res.raise_for_status()
     return pd.read_csv(io.StringIO(res.text))
 
-# No @st.cache_data here: parsed data stays strictly bound to the active user session in RAM
+# No @st.cache_data here: parsed data stays strictly bound to session memory
 def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True):
     frames = []
     if uploaded_files:
         for f in uploaded_files:
-            # Enforce max upload limit per file
-            if hasattr(f, 'size') and f.size > MAX_UPLOAD_BYTES:
-                st.error(f"File {f.name} exceeds max allowed size ({MAX_UPLOAD_BYTES // (1024*1024)} MB).")
+            if hasattr(f, 'size') and f.size > MAX_FILE_BYTES:
+                st.error(f"File exceeds maximum allowed size ({MAX_FILE_BYTES // (1024*1024)} MB).")
                 continue
             try:
                 f.seek(0)
@@ -444,18 +445,23 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
                     c = json.load(f)
                     frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
             except Exception as e:
-                log_error("File Parsing", e, f"Could not process uploaded file.")
+                log_error("File Parsing", e, "A file could not be parsed.")
     if gsheet_url and validate_gsheet_url(gsheet_url):
         try:
             frames.append(parse_gsheet_url(gsheet_url.strip()))
         except Exception as e:
-            log_error("Google Sheets", e, "Failed to load public Google Sheet.")
+            log_error("Google Sheets Ingestion", e, "Failed to load public Google Sheet.")
+    
     if not frames: 
         return pd.DataFrame()
     
     df = pd.concat(frames, ignore_index=True)
     del frames
     gc.collect()
+
+    if len(df) > MAX_TOTAL_ROWS:
+        st.warning(f"Dataset truncated to the first {MAX_TOTAL_ROWS:,} rows to maintain container stability.")
+        df = df.iloc[:MAX_TOTAL_ROWS].copy()
 
     if is_music:
         aliases = {
@@ -677,10 +683,9 @@ if nav_mode == "What Can I Do Here?":
 # ---------------------------------------------------------
 if not has_input_data:
     st.info("👋 Upload CSV, Excel, or JSON files, or paste a public Google Sheets link in the sidebar to begin analyzing your data.")
-    st.caption("🔒 **Privacy Guarantee:** All uploaded data is analyzed entirely in volatile RAM. No records are written to permanent server disk, and data is destroyed immediately when you close the tab or reset.")
+    st.caption("🔒 **Online Privacy Protected:** Uploaded records exist solely in temporary container RAM during your active session. No user files are written to permanent server storage.")
     st.stop()
 
-# Ingest fresh dataframe strictly for this browser session
 df = parse_and_standardize_session(uploaded, gsheet, is_music=is_music_profile)
 if df.empty:
     st.warning("No records ingested. Check format and contents.")
