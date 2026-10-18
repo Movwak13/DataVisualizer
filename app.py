@@ -1,4 +1,4 @@
-﻿import io, json, logging, os, re, sys, traceback, copy, gc
+﻿import io, json, logging, os, re, sys, traceback, gc
 from datetime import datetime, date
 from urllib.parse import urlparse
 from logging.handlers import RotatingFileHandler
@@ -34,6 +34,24 @@ if not logger.handlers:
 def log_error(context: str, exc: Exception, user_msg: str):
     logger.error(f"Error in {context}: {type(exc).__name__}: {str(exc)}\n{traceback.format_exc()}")
     st.sidebar.error(f"⚠️ {user_msg}")
+
+# ---------------------------------------------------------
+# IP SANITIZATION ENGINE
+# ---------------------------------------------------------
+IPV4_REGEX = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
+
+def strip_ip_addresses(dataframe: pd.DataFrame) -> pd.DataFrame:
+    ip_cols_to_drop = [c for c in dataframe.columns if re.search(r'(^|_)ip(_addr|_address)?$', str(c).lower())]
+    if ip_cols_to_drop:
+        dataframe = dataframe.drop(columns=ip_cols_to_drop, errors='ignore')
+
+    text_cols = dataframe.select_dtypes(include=['object', 'string']).columns
+    for col in text_cols:
+        if col not in ['Date_Only', 'Time_Only', 'Day_of_Week', 'Month_Year']:
+            has_ip = dataframe[col].astype(str).str.contains(IPV4_REGEX, regex=True, na=False)
+            if has_ip.any():
+                dataframe.loc[has_ip, col] = dataframe.loc[has_ip, col].astype(str).str.replace(IPV4_REGEX, '[REDACTED_IP]', regex=True)
+    return dataframe
 
 def get_container_ram_stats():
     process = psutil.Process(os.getpid())
@@ -305,12 +323,10 @@ chart_bg = "#111827" if export_theme == "Dark Canvas" else "#FFFFFF"
 chart_text = "#E5E7EB" if export_theme == "Dark Canvas" else "#111827"
 chart_grid = "#1F2937" if export_theme == "Dark Canvas" else "#E5E7EB"
 
-
 # ---------------------------------------------------------
-# DATA & PLATFORM INGESTION (LEGALLY PROTECTED)
+# DATA & PLATFORM INGESTION (LEGALLY SECURED)
 # ---------------------------------------------------------
 with st.sidebar.expander("💾 Data & Platform", expanded=True):
-    # LEGAL DISCLAIMER & MANDATORY USER ACKNOWLEDGMENT GATE
     st.markdown("""
     <div class="legal-card">
         <strong>⚠️ NOTICE & PRIVACY DISCLAIMER:</strong><br>
@@ -480,6 +496,9 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
     df = pd.concat(frames, ignore_index=True)
     del frames
 
+    # Strip and redact all IP address metadata
+    df = strip_ip_addresses(df)
+
     if len(df) > MAX_TOTAL_ROWS:
         st.warning(f"Dataset truncated to the first {MAX_TOTAL_ROWS:,} rows to maintain container stability.")
         df = df.iloc[:MAX_TOTAL_ROWS].copy()
@@ -540,7 +559,7 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
     return df
 
 # ---------------------------------------------------------
-# OPTIMIZED VECTORIZED HABIT ANALYTICS (O(N) vs O(N^2))
+# OPTIMIZED VECTORIZED HABIT ANALYTICS (PANDAS SAFE)
 # ---------------------------------------------------------
 def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=None, end_date=None):
     dt_candidates = [c for c in data_df.columns if c.endswith('_dt')]
@@ -580,6 +599,7 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
             "avg_tracks_per_session": 0.0
         }
 
+    # Vectorized fast epoch conversion safe for newer Pandas
     epoch_seconds = active_ts.astype('int64').to_numpy() // 10**9
     time_gaps_min = np.diff(epoch_seconds) / 60.0
     session_cuts = np.where(time_gaps_min > session_idle_minutes)[0]
@@ -628,59 +648,23 @@ if nav_mode == "What Can I Do Here?":
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("#### 🎧 Step-by-Step Tutorial: Running a Spotify Heatmap")
-        st.markdown("""
-        <div class="guide-card">
-            <div class="guide-step">
-                <span class="step-badge">1</span>
-                <span><b>Upload Your Spotify Files:</b> Drop your <code>StreamingHistory_music_*.json</code> or <code>endsong_*.json</code> files into the sidebar file uploader.</span>
-            </div>
-            <div class="guide-step">
-                <span class="step-badge">2</span>
-                <span><b>Switch to 'Visualizer':</b> In the sidebar under <b>Navigation</b>, click the <b>📊 Visualizer</b> button.</span>
-            </div>
-            <div class="guide-step">
-                <span class="step-badge">3</span>
-                <span><b>Open the Heatmap Tab:</b> Click the <b>🔥 Multi-Select Heatmaps</b> tab in the dashboard below.</span>
-            </div>
-            <div class="guide-step">
-                <span class="step-badge">4</span>
-                <span><b>Configure Axes:</b> Keep <b>Y-Axis</b> set to <i>Day of Week</i> and <b>X-Axis</b> set to <i>Hour of Day (0–23)</i>.</span>
-            </div>
-            <div class="guide-step">
-                <span class="step-badge">5</span>
-                <span><b>Export Your Graphic:</b> Click <b>🖼️ Download PNG</b> below the chart to save high-resolution graphics for sharing.</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
     with col_right:
         st.markdown("#### 🎨 Interactive Sample Previews (Mock Data)")
-        st.caption("Interact with these sample graphics below to see how dynamic tooltips and color scales respond.")
-
         sample_b_data = pd.DataFrame({
             "Artist": ["Daft Punk", "The Weeknd", "Radiohead", "Kendrick Lamar", "Fleetwood Mac"],
             "Hours": [82.4, 65.1, 54.3, 49.0, 38.6]
         })
         fig_sample_b = px.bar(
-            sample_b_data,
-            x="Hours",
-            y="Artist",
-            orientation="h",
-            color="Hours",
-            color_continuous_scale=selected_palette,
-            title="Sample Preview: Top Artists by Hours Played",
-            text="Hours"
+            sample_b_data, x="Hours", y="Artist", orientation="h",
+            color="Hours", color_continuous_scale=selected_palette,
+            title="Sample Preview: Top Artists by Hours Played", text="Hours"
         )
         fig_sample_b.update_traces(texttemplate="%{text:.1f} hrs", textposition="outside", cliponaxis=False)
         fig_sample_b.update_layout(
-            paper_bgcolor=chart_bg,
-            plot_bgcolor=chart_bg,
-            font=dict(color=chart_text),
+            paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
             yaxis=dict(categoryorder="total ascending", automargin=True),
             xaxis=dict(automargin=True, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-            margin=dict(l=100, r=40, t=40, b=30),
-            height=260
+            margin=dict(l=100, r=40, t=40, b=30), height=260
         )
         st.plotly_chart(fig_sample_b, use_container_width=True, config={'responsive': True})
 
@@ -691,22 +675,14 @@ if nav_mode == "What Can I Do Here?":
         mock_matrix[4:6, 8:11] += 50
 
         fig_sample_h = px.imshow(
-            mock_matrix,
-            labels=dict(x="Hour of Day", y="Day of Week", color="Plays"),
-            x=hours,
-            y=days,
-            aspect="auto",
-            color_continuous_scale=selected_palette,
+            mock_matrix, labels=dict(x="Hour of Day", y="Day of Week", color="Plays"),
+            x=hours, y=days, aspect="auto", color_continuous_scale=selected_palette,
             title="Sample Preview: Activity Density Heatmap"
         )
         fig_sample_h.update_layout(
-            paper_bgcolor=chart_bg,
-            plot_bgcolor=chart_bg,
-            font=dict(color=chart_text),
-            yaxis=dict(automargin=True, color=chart_text),
-            xaxis=dict(automargin=True, color=chart_text),
-            margin=dict(l=80, r=40, t=40, b=30),
-            height=270
+            paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+            yaxis=dict(automargin=True, color=chart_text), xaxis=dict(automargin=True, color=chart_text),
+            margin=dict(l=80, r=40, t=40, b=30), height=270
         )
         st.plotly_chart(fig_sample_h, use_container_width=True, config={'responsive': True})
 
@@ -1283,5 +1259,3 @@ with t_catalog:
         key=f"dl_{clean_export_name}",
         help="Download the filtered catalog table as a sanitized CSV file."
     )
-
-
