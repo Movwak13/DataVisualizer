@@ -439,16 +439,18 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
 # OPTIMIZED VECTORIZED SANITIZATION & SAFE EXPORT
 # ---------------------------------------------------------
 def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
-    df_copy = df_in.copy()
-    injection_pattern = r"^[\=\+\-\@\t\r]"
-    for col in df_copy.select_dtypes(include=['object', 'string', 'category']).columns:
-        s = df_copy[col].astype(str)
-        bad_mask = s.str.contains(injection_pattern, regex=True, na=False)
-        if bad_mask.any():
-            df_copy.loc[bad_mask, col] = "'" + s[bad_mask]
-    csv_bytes = df_copy.to_csv(index=False).encode('utf-8')
-    del df_copy
-    return csv_bytes
+df_copy = df_in.copy()
+injection_pattern = r"^[\=\+\-\@\t\r]"
+for col in df_copy.select_dtypes(include=['object', 'string', 'category']).columns:
+    # Cast to object/string first so pandas Categorical does not reject new values
+    df_copy[col] = df_copy[col].astype(str)
+    s = df_copy[col]
+    bad_mask = s.str.contains(injection_pattern, regex=True, na=False)
+    if bad_mask.any():
+        df_copy.loc[bad_mask, col] = "'" + s[bad_mask]
+csv_bytes = df_copy.to_csv(index=False).encode('utf-8')
+del df_copy
+return csv_bytes
 
 def parse_gsheet_url(url: str):
     if not validate_gsheet_url(url):
@@ -1259,3 +1261,4 @@ with t_catalog:
         key=f"dl_{clean_export_name}",
         help="Download the filtered catalog table as a sanitized CSV file."
     )
+
