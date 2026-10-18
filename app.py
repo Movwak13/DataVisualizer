@@ -580,7 +580,7 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
             "avg_tracks_per_session": 0.0
         }
 
-    epoch_seconds = active_ts.view('int64') // 10**9
+    epoch_seconds = active_ts.astype('int64').to_numpy() // 10**9
     time_gaps_min = np.diff(epoch_seconds) / 60.0
     session_cuts = np.where(time_gaps_min > session_idle_minutes)[0]
     
@@ -1283,4 +1283,5 @@ with t_catalog:
         key=f"dl_{clean_export_name}",
         help="Download the filtered catalog table as a sanitized CSV file."
     )
+
 
