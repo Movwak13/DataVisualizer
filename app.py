@@ -55,24 +55,18 @@ def log_error(context: str, exc: Exception, user_msg: str):
 # ---------------------------------------------------------
 # COMPREHENSIVE SENSITIVE PII & IP SANITIZATION ENGINE
 # ---------------------------------------------------------
-IPV4_REGEX = r'(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'
-IPV6_REGEX = r'(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}'
+IPV4_REGEX = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
+IPV6_REGEX = r'\b(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}\b'
 
 SENSITIVE_KEY_PATTERNS = [
-    # IP Addresses
     r'(^|_)ip(_addr|_address)?$', r'client_ip', r'remote_addr', r'ip_addr_decrypted',
-    # User Identifiers
     r'(^|_)user(_?id|_name|_account)?$', r'customer_id', r'listener_id', r'store_account_id',
-    # Hardware & Devices
     r'device(_?id|_identifier|_serial|_number)?$', r'hardware_id', r'build_version', r'user_agent',
-    # Streaming & Account URIs
     r'spotify_(track|episode|audiobook)_uri', r'audiobook_chapter_uri',
-    # Geo / Location / Sessions
     r'session_id', r'token', r'location_zip', r'postal_code', r'latitude', r'longitude'
 ]
 
 def clean_raw_json_obj(item):
-    """Recursively removes sensitive keys and scrubs IPs from nested dicts/lists in JSON."""
     if isinstance(item, list):
         return [clean_raw_json_obj(x) for x in item]
     elif isinstance(item, dict):
@@ -93,7 +87,6 @@ def clean_raw_json_obj(item):
     return item
 
 def strip_ip_addresses(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """Drops PII/IP columns and scrubs embedded IPs across all string fields."""
     cols_to_drop = [
         c for c in dataframe.columns 
         if any(re.search(pat, str(c).lower().strip()) for pat in SENSITIVE_KEY_PATTERNS)
@@ -297,7 +290,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# RESTORED SIDEBAR NAVIGATION (TILE BUTTONS)
+# SIDEBAR NAVIGATION (TILE BUTTONS)
 # ---------------------------------------------------------
 st.sidebar.markdown("<div class='sidebar-nav-label'>🧭 Navigation</div>", unsafe_allow_html=True)
 col_nav1, col_nav2 = st.sidebar.columns(2)
@@ -418,6 +411,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
                     del st.session_state[k]
             gc.collect()
             st.rerun()
+
     def validate_gsheet_url(url: str) -> bool:
         if not url:
             return False
@@ -541,16 +535,16 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
                     frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
             except Exception as e:
                 log_error("File Parsing", e, "A file could not be parsed.")
-    if gsheet_url and validate_gsheet_url(gsheet_url):
+
     if gsheet_url and validate_gsheet_url(gsheet_url):
         try:
             frames.append(parse_gsheet_url(gsheet_url.strip()))
         except Exception as e:
             log_error("Google Sheets Ingestion", e, "Failed to load public Google Sheet.")
-    
+
     if not frames: 
         return pd.DataFrame()
-    
+
     df = pd.concat(frames, ignore_index=True)
     del frames
 
@@ -752,7 +746,7 @@ def render_full_guide():
                 2. Request **Step 2: Extended streaming history** (the lifetime audio history) rather than the standard basic package.
                 3. Confirm the verification email sent by Spotify.
             * **Delivery Time:** Typically 5 to 14 days.
-            * **What to Upload:** Spotify delivers .zip batches containing files named Streaming_History_Audio_*.json or endsong_*.json. Drag and drop these .json files directly into this visualizer.
+            * **What to Upload:** Spotify delivers `.zip` batches containing files named `Streaming_History_Audio_*.json` or `endsong_*.json`. Drag and drop these `.json` files directly into this visualizer.
             ''')
 
         with st.expander("🍎 Apple Music", expanded=False):
@@ -763,7 +757,7 @@ def render_full_guide():
                 2. Under *Manage your data*, click **Request a copy of your data**.
                 3. Check the box for **Apple Media Services information** and submit.
             * **Delivery Time:** Typically 2 to 5 days.
-            * **What to Upload:** In the downloaded archive, open Apple_Media_Services/Apple Music Activity/ and upload Apple Music Play Activity.csv.
+            * **What to Upload:** In the downloaded archive, open `Apple_Media_Services/Apple Music Activity/` and upload `Apple Music Play Activity.csv`.
             ''')
 
         with st.expander("▶️ YouTube Music", expanded=False):
@@ -774,7 +768,7 @@ def render_full_guide():
                 2. Under the format settings, click **All YouTube data included** and select only **history**.
                 3. Choose **JSON** as the export format if prompted, then click **Create export**.
             * **Delivery Time:** A few minutes to several hours.
-            * **What to Upload:** Extract the downloaded archive and upload YouTube and YouTube Music/history/watch-history.json.
+            * **What to Upload:** Extract the downloaded archive and upload `YouTube and YouTube Music/history/watch-history.json`.
             ''')
 
         with st.expander("📦 Amazon Music", expanded=False):
@@ -785,7 +779,7 @@ def render_full_guide():
                 2. In the category dropdown, select **Amazon Music**.
                 3. Submit the request and confirm via the verification link sent to your email.
             * **Delivery Time:** 24 to 72 hours.
-            * **What to Upload:** Upload the received .csv or .json file (typically PlayHistory.csv or Amazon_Music_Listening_History.csv).
+            * **What to Upload:** Upload the received `.csv` or `.json` file (typically `PlayHistory.csv` or `Amazon_Music_Listening_History.csv`).
             ''')
 
         with st.expander("📻 Pandora", expanded=False):
@@ -794,7 +788,7 @@ def render_full_guide():
             * **Steps to Request:**
                 1. Submit a customer privacy request under **"Request My Personal Information"** (GDPR / CCPA / US Privacy rights).
                 2. Pandora support will verify your identity and generate your account listening archive.
-            * **What to Upload:** Upload the delivered station_history.csv or play_history.csv.
+                * **What to Upload:** Upload the delivered `station_history.csv` or `play_history.csv`.
             ''')
 
 # If user selected Guide in sidebar, render guide and stop
@@ -870,7 +864,7 @@ with top_tab_qa:
             lead_col = num_cols_qa[0]
             p1, p2, p3 = st.columns(3)
             p1.metric(f"Total Sum ({lead_col})", f"{df[lead_col].sum():,.2f}")
-            p1.metric(f"Average ({lead_col})", f"{df[lead_col].mean():,.2f}")
+            p2.metric(f"Average ({lead_col})", f"{df[lead_col].mean():,.2f}")
             p3.metric(f"Max ({lead_col})", f"{df[lead_col].max():,.2f}")
         st.markdown("</section>", unsafe_allow_html=True)
 
@@ -1367,4 +1361,3 @@ with t_catalog:
         key=f"dl_{clean_export_name}",
         help="Download the filtered catalog table as a sanitized CSV file."
     )
-
