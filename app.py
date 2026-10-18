@@ -18,10 +18,8 @@ if "uploader_key" not in st.session_state:
 
 def purge_and_reset_uploads():
     if not st.session_state.get("legal_acknowledgment", False):
-        # Invalidate the file uploader buffer by changing its key
         st.session_state.uploader_key += 1
-        # Clear all cached/persisted session variables except navigation
-        keys_to_clear = [k for k in list(st.session_state.keys()) if k not in ["nav_mode", "uploader_key", "legal_acknowledgment"]]
+        keys_to_clear = [k for k in list(st.session_state.keys()) if k not in ["uploader_key", "legal_acknowledgment"]]
         for k in keys_to_clear:
             del st.session_state[k]
         gc.collect()
@@ -72,7 +70,6 @@ def strip_ip_addresses(dataframe: pd.DataFrame) -> pd.DataFrame:
 def get_container_ram_stats():
     process = psutil.Process(os.getpid())
     process_mb = process.memory_info().rss / (1024 * 1024)
-
     cgroup_limit_file = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
     cgroup_usage_file = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
     
@@ -166,14 +163,6 @@ st.markdown("""
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
     }
-    .sr-only {
-        position: absolute !important; width: 1px !important; height: 1px !important;
-        padding: 0 !important; margin: -1px !important; overflow: hidden !important;
-        clip: rect(0, 0, 0, 0) !important; border: 0 !important;
-    }
-    button:focus-visible, input:focus-visible, select:focus-visible {
-        outline: 2px solid #38bdf8 !important; outline-offset: 2px !important;
-    }
     .app-title-wrapper {
         margin: 0.25rem 0 1.25rem 0;
         display: flex;
@@ -224,22 +213,6 @@ st.markdown("""
     div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
         display: none !important;
     }
-    .sidebar-nav-label {
-        font-size: 0.82rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        color: #94A3B8;
-        margin-bottom: 8px;
-    }
-    [data-testid="stSidebar"] div.row-widget.stButton button {
-        border-radius: 6px !important;
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        padding: 8px 6px !important;
-        min-height: 40px !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    }
     .legal-card {
         background-color: rgba(239, 68, 68, 0.08);
         border: 1px solid rgba(239, 68, 68, 0.35);
@@ -261,30 +234,6 @@ st.markdown("""
     <h1 class="app-title-text">📊 Universal Multi-Select Data Visualizer</h1>
 </div>
 """, unsafe_allow_html=True)
-
-# ---------------------------------------------------------
-# SIDEBAR NAVIGATION
-# ---------------------------------------------------------
-if "nav_mode" not in st.session_state:
-    st.session_state.nav_mode = "Visualize My Data"
-
-st.sidebar.markdown("<div class='sidebar-nav-label'>🧭 Navigation</div>", unsafe_allow_html=True)
-col_nav1, col_nav2 = st.sidebar.columns(2)
-
-is_vis_active = (st.session_state.nav_mode == "Visualize My Data")
-
-with col_nav1:
-    if st.button("📊 Visualizer", use_container_width=True, type="primary" if is_vis_active else "secondary"):
-        st.session_state.nav_mode = "Visualize My Data"
-        st.rerun()
-
-with col_nav2:
-    if st.button("💡 Guide", use_container_width=True, type="primary" if not is_vis_active else "secondary"):
-        st.session_state.nav_mode = "What Can I Do Here?"
-        st.rerun()
-
-nav_mode = st.session_state.nav_mode
-st.sidebar.markdown("<div style='margin-bottom: 14px;'></div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # SIDEBAR CONTROLS
@@ -359,7 +308,8 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
     terms_accepted = st.checkbox(
         "I certify that my files contain NO sensitive data, PHI (HIPAA), or confidential info, and accept these terms.",
         value=False,
-        key="legal_acknowledgment"
+        key="legal_acknowledgment",
+        on_change=purge_and_reset_uploads
     )
 
     if not terms_accepted:
@@ -382,7 +332,8 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
 
         if st.button("🗑️ Reset Session & Clear Data", use_container_width=True, help="Immediately releases all memory structures and resets the view."):
             for k in list(st.session_state.keys()):
-                del st.session_state[k]
+                if k not in ["uploader_key", "legal_acknowledgment"]:
+                    del st.session_state[k]
             gc.collect()
             st.rerun()
 
@@ -436,15 +387,10 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             return "Spotify"
         if any(k in cols_lower for k in ['event start timestamp', 'play duration milliseconds', 'content name']):
             return "Apple Music"
-        # Pandora Fingerprint
         if any(k in cols_lower for k in ['station_name', 'station_history', 'track_title']) or ('artist_name' in cols_lower and 'album_title' in cols_lower):
             return "Pandora"
-        
-        # YouTube Music (Google Takeout) Fingerprint
         if any(k in cols_lower for k in ['titleurl', 'subtitles']) or ('title' in cols_lower and 'header' in cols_lower):
             return "YouTube Music"
-            
-        # Amazon Music Fingerprint
         if any(k in cols_lower for k in ['trackname', 'songtitle']) or ('artistname' in cols_lower and 'albumtitle' in cols_lower) or any(k in cols_lower for k in ['playdate', 'eventtimestamp']):
             return "Amazon Music"
         return None
@@ -478,7 +424,6 @@ def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
     csv_bytes = df_copy.to_csv(index=False).encode('utf-8')
     del df_copy
     return csv_bytes
-
 
 def parse_gsheet_url(url: str):
     if not validate_gsheet_url(url):
@@ -526,10 +471,8 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
     df = pd.concat(frames, ignore_index=True)
     del frames
 
-    # Strip and redact all IP address metadata
     df = strip_ip_addresses(df)
 
-    # Clean YouTube Music Takeout fields if present
     if 'Track' in df.columns and df['Track'].astype(str).str.startswith("Watched ").any():
         df['Track'] = df['Track'].astype(str).str.replace(r"^Watched\s+", "", regex=True)
     if 'subtitles' in df.columns and 'Artist' not in df.columns:
@@ -561,15 +504,10 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
             'Play Duration Milliseconds': 'ms_played', 'End Reason Type': 'reason_end', 'Build Version': 'Platform',
             'track_title': 'Track', 'artist_name': 'Artist', 'album_title': 'Album',
             'datetime': 'timestamp', 'station_name': 'Platform',
-            
-            # Amazon Music Aliases
             'SongTitle': 'Track', 'TrackName': 'Track', 'Song Title': 'Track', 'Track Name': 'Track',
-            'ArtistName': 'Artist', 'Artist Name': 'Artist',
-            'AlbumTitle': 'Album', 'Album Title': 'Album',
+            'ArtistName': 'Artist', 'AlbumTitle': 'Album', 'Album Title': 'Album',
             'PlayDate': 'timestamp', 'EventTimestamp': 'timestamp', 'PlaybackDate': 'timestamp',
             'Duration': 'ms_played', 'PlayDuration': 'ms_played',
-            
-            # YouTube Music Aliases
             'title': 'Track', 'titleUrl': 'Track_URL', 'time': 'timestamp'
         }
         df = df.rename(columns={k: v for k, v in aliases.items() if k in df.columns})
@@ -614,9 +552,6 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
 
     return df
 
-# ---------------------------------------------------------
-# OPTIMIZED VECTORIZED HABIT ANALYTICS (PANDAS SAFE)
-# ---------------------------------------------------------
 def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=None, end_date=None):
     dt_candidates = [c for c in data_df.columns if c.endswith('_dt')]
     if not dt_candidates:
@@ -655,7 +590,6 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
             "avg_tracks_per_session": 0.0
         }
 
-    # Vectorized fast epoch conversion safe for newer Pandas
     epoch_seconds = active_ts.astype('int64').to_numpy() // 10**9
     time_gaps_min = np.diff(epoch_seconds) / 60.0
     session_cuts = np.where(time_gaps_min > session_idle_minutes)[0]
@@ -671,38 +605,28 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
         "avg_tracks_per_session": avg_tracks_per_session
     }
 
-has_input_data = bool(uploaded or (gsheet and validate_gsheet_url(gsheet)))
-is_music_profile = DATASET_PROFILES.get(selected_profile, {}).get("is_music", False)
-
-# ---------------------------------------------------------
-# VIEW 1: WHAT CAN I DO HERE? (TUTORIAL & GUIDE)
-# ---------------------------------------------------------
-if nav_mode == "What Can I Do Here?":
-    st.markdown("### 💡 What Can I Do Here?")
-    st.markdown("Learn how to explore your streaming data, configure multi-select filters, and export high-resolution visuals.")
-
+def render_overview_content():
     col_left, col_right = st.columns([1, 1], gap="large")
-
     with col_left:
         st.markdown("#### 🧭 Types of Visualizations Available")
-        st.markdown("""
-        <div class="guide-card">
+        st.markdown('''
+        <div style="margin-bottom: 12px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.03);">
             <b>1. 📊 Multi-Select Breakdowns (Horizontal Bar Charts)</b><br>
-            Rank entities such as Artists, Albums, Songs, or categories by raw play count, total hours listened, or column averages. Filter by specific selections or view the full dataset scope.
+            Rank entities such as Artists, Albums, Songs, or categories by raw play count, total hours listened, or column averages.
         </div>
-        <div class="guide-card">
+        <div style="margin-bottom: 12px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.03);">
             <b>2. 📈 Multi-Select Time Trends (Time Series Line & Bar Charts)</b><br>
-            Track how your activity evolves month-over-month, or identify which days of the week you listen the most. Compare up to 10 entities side-by-side over time.
+            Track activity month-over-month or by day of the week, comparing multiple entities over time.
         </div>
-        <div class="guide-card">
+        <div style="margin-bottom: 12px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.03);">
             <b>3. 🔥 Temporal Density Heatmaps (Interactive Matrix)</b><br>
-            Spot peak activity hours and habits (e.g. Day of Week vs. Hour of Day). Darker/brighter tiles immediately highlight when you are most active.
+            Spot peak activity windows (Day of Week vs. Hour of Day). Brighter tiles highlight when you are most active.
         </div>
-        <div class="guide-card">
+        <div style="margin-bottom: 12px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.03);">
             <b>4. 📋 Catalog & Global Leaderboard</b><br>
-            A high-speed searchable master index of every track, artist, or album with hours played, total counts, and instant CSV export capabilities.
+            Master searchable index of all items with total hours, counts, and instant CSV export.
         </div>
-        """, unsafe_allow_html=True)
+        ''', unsafe_allow_html=True)
 
     with col_right:
         st.markdown("#### 🎨 Interactive Sample Previews (Mock Data)")
@@ -720,38 +644,85 @@ if nav_mode == "What Can I Do Here?":
             paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
             yaxis=dict(categoryorder="total ascending", automargin=True),
             xaxis=dict(automargin=True, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-            margin=dict(l=100, r=40, t=40, b=30), height=260
+            margin=dict(l=100, r=40, t=40, b=30), height=240
         )
         st.plotly_chart(fig_sample_b, use_container_width=True, config={'responsive': True})
 
-        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        hours = [f"{h:02d}:00" for h in range(0, 24, 2)]
-        np.random.seed(42)
-        mock_matrix = np.random.randint(5, 85, size=(len(days), len(hours)))
-        mock_matrix[4:6, 8:11] += 50
+def render_request_guide_content():
+    st.markdown("#### 📥 Where & How to Download Your Data")
+    st.caption("Select your streaming provider below for step-by-step instructions and direct portal links.")
 
-        fig_sample_h = px.imshow(
-            mock_matrix, labels=dict(x="Hour of Day", y="Day of Week", color="Plays"),
-            x=hours, y=days, aspect="auto", color_continuous_scale=selected_palette,
-            title="Sample Preview: Activity Density Heatmap"
-        )
-        fig_sample_h.update_layout(
-            paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-            yaxis=dict(automargin=True, color=chart_text), xaxis=dict(automargin=True, color=chart_text),
-            margin=dict(l=80, r=40, t=40, b=30), height=270
-        )
-        st.plotly_chart(fig_sample_h, use_container_width=True, config={'responsive': True})
+    with st.expander("🟢 Spotify (Extended Streaming History)", expanded=True):
+        st.markdown('''
+        * **Direct Privacy Portal:** [Spotify Privacy Settings](https://www.spotify.com/account/privacy/)
+        * **Steps to Request:**
+            1. Sign in to your Spotify Account and scroll down to **Download your data**.
+            2. Request **Step 2: Extended streaming history** (the lifetime audio history) rather than the standard basic package.
+            3. Confirm the verification email sent by Spotify.
+        * **Delivery Time:** Typically 5 to 14 days.
+        * **What to Upload:** Spotify delivers .zip batches containing files named Streaming_History_Audio_*.json or endsong_*.json. Drag and drop these .json files directly into this visualizer.
+        ''')
 
-    st.stop()
+    with st.expander("🍎 Apple Music", expanded=False):
+        st.markdown('''
+        * **Direct Privacy Portal:** [Apple Data & Privacy](https://privacy.apple.com)
+        * **Steps to Request:**
+            1. Sign in with your Apple ID.
+            2. Under *Manage your data*, click **Request a copy of your data**.
+            3. Check the box for **Apple Media Services information** and submit.
+        * **Delivery Time:** Typically 2 to 5 days.
+        * **What to Upload:** In the downloaded archive, open Apple_Media_Services/Apple Music Activity/ and upload Apple Music Play Activity.csv.
+        ''')
+
+    with st.expander("▶️ YouTube Music", expanded=False):
+        st.markdown('''
+        * **Direct Privacy Portal:** [Google Takeout](https://takeout.google.com/)
+        * **Steps to Request:**
+            1. Click **Deselect all**, then scroll down to **YouTube and YouTube Music**.
+            2. Under the format settings, click **All YouTube data included** and select only **history**.
+            3. Choose **JSON** as the export format if prompted, then click **Create export**.
+        * **Delivery Time:** A few minutes to several hours.
+        * **What to Upload:** Extract the downloaded archive and upload YouTube and YouTube Music/history/watch-history.json.
+        ''')
+
+    with st.expander("📦 Amazon Music", expanded=False):
+        st.markdown('''
+        * **Direct Privacy Portal:** [Amazon Privacy Central (Request My Data)](https://www.amazon.com/hz/privacy-central/data-requests/preview.html)
+        * **Steps to Request:**
+            1. Sign in to your Amazon account and navigate to *Request Your Information*.
+            2. In the category dropdown, select **Amazon Music**.
+            3. Submit the request and confirm via the verification link sent to your email.
+        * **Delivery Time:** 24 to 72 hours.
+        * **What to Upload:** Upload the received .csv or .json file (typically PlayHistory.csv or Amazon_Music_Listening_History.csv).
+        ''')
+
+    with st.expander("📻 Pandora", expanded=False):
+        st.markdown('''
+        * **Direct Privacy Portal:** [Pandora Help Center & Privacy](https://help.pandora.com/)
+        * **Steps to Request:**
+            1. Submit a customer privacy request under **"Request My Personal Information"** (GDPR / CCPA / US Privacy rights).
+            2. Pandora support will verify your identity and generate your account listening archive.
+        * **What to Upload:** Upload the delivered station_history.csv or play_history.csv.
+        ''')
+
+has_input_data = bool(uploaded or (gsheet and validate_gsheet_url(gsheet)))
+is_music_profile = DATASET_PROFILES.get(selected_profile, {}).get("is_music", False)
 
 # ---------------------------------------------------------
-# VIEW 2: VISUALIZE MY DATA (DATA DASHBOARD)
+# INITIAL EMPTY STATE (WHEN NO FILES ARE LOADED)
 # ---------------------------------------------------------
 if not has_input_data:
-    st.info("👋 Upload CSV, Excel, or JSON files, or paste a public Google Sheets link in the sidebar to begin analyzing your data.")
-    st.caption("🔒 **Online Privacy Protected:** Uploaded records exist solely in temporary container RAM during your active session. No user files are written to permanent server storage.")
+    st.info("👋 Upload your streaming history files or spreadsheets in the sidebar to begin.")
+    t_overview_empty, t_requests_empty = st.tabs(["📋 Overview", "📥 How to Request Data"])
+    with t_overview_empty:
+        render_overview_content()
+    with t_requests_empty:
+        render_request_guide_content()
     st.stop()
 
+# ---------------------------------------------------------
+# DATA PROCESSING & METRICS
+# ---------------------------------------------------------
 df = parse_and_standardize_session(uploaded, gsheet, is_music=is_music_profile)
 if df.empty:
     st.warning("No records ingested. Check format and contents.")
@@ -767,9 +738,14 @@ if dt_col:
 else:
     d_start_val, d_end_val = None, None
 
-if is_music_profile:
-    top_tab_qa, top_tab_info = st.tabs(["⚡ Quick Analysis", "ℹ️ Data Info"])
-    with top_tab_qa:
+# ---------------------------------------------------------
+# TOP MAIN TABS (KPIs, DATA INFO, OVERVIEW, REQUEST GUIDE)
+# ---------------------------------------------------------
+tab_labels = ["⚡ Quick Analysis", "ℹ️ Data Info", "📋 Overview", "📥 How to Request Data"]
+t_qa, t_info, t_guide, t_requests = st.tabs(tab_labels)
+
+with t_qa:
+    if is_music_profile:
         st.markdown("<section aria-label='Music Summary Metrics'>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         c1.metric("Unique Artists", f"{df['Artist'].nunique():,}" if 'Artist' in df.columns else "N/A")
@@ -795,20 +771,8 @@ if is_music_profile:
             s2.metric("Longest Streak (Selected Frame)", f"{streaks['selected_frame_streak']} days")
             s3.metric("Listening Sessions", f"{streaks['total_sessions']:,}")
             s4.metric("Avg Tracks / Session", f"{streaks['avg_tracks_per_session']}")
-            
         st.markdown("</section>", unsafe_allow_html=True)
-
-    with top_tab_info:
-        st.markdown("<section aria-label='Data Info Metrics'>", unsafe_allow_html=True)
-        i1, i2, i3 = st.columns(3)
-        i1.metric("Total Records", f"{len(df):,}")
-        i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
-        i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled")
-        st.markdown("</section>", unsafe_allow_html=True)
-
-else:
-    top_tab_qa, top_tab_info = st.tabs(["⚡ Quick Analysis", "ℹ️ Data Info"])
-    with top_tab_qa:
+    else:
         st.markdown("<section aria-label='General Dataset Summary Metrics'>", unsafe_allow_html=True)
         num_cols_qa = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32']).columns.tolist()
         c1, c2, c3 = st.columns(3)
@@ -824,11 +788,19 @@ else:
             p3.metric(f"Max ({lead_col})", f"{df[lead_col].max():,.2f}")
         st.markdown("</section>", unsafe_allow_html=True)
 
-    with top_tab_info:
-        i1, i2, i3 = st.columns(3)
-        i1.metric("Total Records", f"{len(df):,}")
-        i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
-        i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled")
+with t_info:
+    st.markdown("<section aria-label='Data Info Metrics'>", unsafe_allow_html=True)
+    i1, i2, i3 = st.columns(3)
+    i1.metric("Total Records", f"{len(df):,}")
+    i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
+    i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled")
+    st.markdown("</section>", unsafe_allow_html=True)
+
+with t_guide:
+    render_overview_content()
+
+with t_requests:
+    render_request_guide_content()
 
 st.divider()
 
@@ -1239,7 +1211,7 @@ with t_heatmap:
             st.plotly_chart(fig_heat, use_container_width=True, config={'responsive': True})
             render_export_bar(fig_heat, pivot.reset_index(), "heatmap_export", total_rows=len(pivot))
 
-# --- TAB 4: CATALOG & RANKINGS (PAGINATED & HIGH PERFORMANCE) ---
+# --- TAB 4: CATALOG & RANKINGS ---
 with t_catalog:
     st.subheader("Global Leaderboard & Catalog")
     target_catalog = st.selectbox(
@@ -1315,7 +1287,3 @@ with t_catalog:
         key=f"dl_{clean_export_name}",
         help="Download the filtered catalog table as a sanitized CSV file."
     )
-
-
-
-
