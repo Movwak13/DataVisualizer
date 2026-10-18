@@ -1,4 +1,4 @@
-﻿import io, json, logging, os, re, sys, traceback
+﻿import io, json, logging, os, re, sys, traceback, gc
 from datetime import datetime, date
 from urllib.parse import urlparse
 from logging.handlers import RotatingFileHandler
@@ -21,9 +21,14 @@ LOG_FILE = os.path.join(LOG_DIR, "app_errors.log")
 logger = logging.getLogger("DataVisualizerLogger")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
+    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     fh = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
-    fh.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+    fh.setFormatter(formatter)
     logger.addHandler(fh)
+
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
 def log_error(context: str, exc: Exception, user_msg: str):
     logger.error(f"Error in {context}: {type(exc).__name__}: {str(exc)}\n{traceback.format_exc()}")
@@ -43,7 +48,7 @@ def load_config():
             "palettes": ["Viridis", "Plasma", "Turbo", "Sunsetdark", "Tealgrn", "Bluered", "Cividis"],
             "default_export_theme": "Dark Canvas"
         },
-        "limits": {"max_music_catalog_items": 500, "max_export_width": 1600, "row_pixel_height": 26},
+        "limits": {"max_music_catalog_items": 500, "max_export_width": 1600, "row_pixel_height": 26, "max_upload_bytes": 50 * 1024 * 1024},
         "ignored_columns": [
             "spotify_track_uri", "spotify_episode_uri", "audiobook_uri", "audiobook_chapter_uri",
             "ip_addr", "user_agent_decrypted", "username", "offline_timestamp", "incognito_mode",
@@ -63,6 +68,7 @@ DATASET_PROFILES = CONFIG.get("profiles", {})
 STYLING_CFG = CONFIG.get("styling", {})
 LIMITS_CFG = CONFIG.get("limits", {})
 IGNORED_COLS = set(CONFIG.get("ignored_columns", []))
+MAX_UPLOAD_BYTES = LIMITS_CFG.get("max_upload_bytes", 50 * 1024 * 1024)
 
 st.set_page_config(
     page_title="Universal Multi-Select Data Visualizer", 
@@ -313,13 +319,20 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         "Upload Files (CSV, Excel, JSON)", 
         type=["csv", "xlsx", "xls", "json"], 
         accept_multiple_files=True,
-        help="Select one or multiple streaming history files or spreadsheet exports to combine and analyze."
+        help="Select one or multiple streaming history files. All files stay strictly in session memory."
     )
     gsheet = st.text_input(
         "Public Google Sheet URL", 
         placeholder="https://docs.google.com/spreadsheets/d/...",
-        help="Enter a public Google Sheets sharing link. The first sheet will be downloaded as a CSV automatically."
+        help="Enter a public Google Sheets sharing link. Downloaded directly into memory."
     )
+
+    # Privacy Session Reset Button
+    if st.button("🗑️ Purge Data & Reset Session", use_container_width=True, help="Immediately clears all uploaded records from active memory."):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        gc.collect()
+        st.rerun()
 
     def validate_gsheet_url(url: str) -> bool:
         if not url:
@@ -387,7 +400,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         st.caption(f"Auto-detected platform: {detected_platform}")
 
 # ---------------------------------------------------------
-# INGESTION & PIPELINE ENGINE
+# INGESTION & PIPELINE ENGINE (SESSION-ISOLATED)
 # ---------------------------------------------------------
 def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
     df_copy = df_in.copy()
@@ -411,11 +424,15 @@ def parse_gsheet_url(url: str):
     res.raise_for_status()
     return pd.read_csv(io.StringIO(res.text))
 
-@st.cache_data(show_spinner="Standardizing and profiling dataset...", max_entries=4)
-def parse_and_standardize(uploaded_files, gsheet_url=None, is_music=True):
+# No @st.cache_data here: parsed data stays strictly bound to the active user session in RAM
+def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True):
     frames = []
     if uploaded_files:
         for f in uploaded_files:
+            # Enforce max upload limit per file
+            if hasattr(f, 'size') and f.size > MAX_UPLOAD_BYTES:
+                st.error(f"File {f.name} exceeds max allowed size ({MAX_UPLOAD_BYTES // (1024*1024)} MB).")
+                continue
             try:
                 f.seek(0)
                 fn = f.name.lower()
@@ -427,7 +444,7 @@ def parse_and_standardize(uploaded_files, gsheet_url=None, is_music=True):
                     c = json.load(f)
                     frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
             except Exception as e:
-                log_error(f"Read {f.name}", e, f"Could not read {f.name}")
+                log_error("File Parsing", e, f"Could not process uploaded file.")
     if gsheet_url and validate_gsheet_url(gsheet_url):
         try:
             frames.append(parse_gsheet_url(gsheet_url.strip()))
@@ -438,6 +455,7 @@ def parse_and_standardize(uploaded_files, gsheet_url=None, is_music=True):
     
     df = pd.concat(frames, ignore_index=True)
     del frames
+    gc.collect()
 
     if is_music:
         aliases = {
@@ -514,10 +532,8 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
         streak_lens = uniq_dates.groupby((diffs != 1).cumsum()).size()
         return int(streak_lens.max())
 
-    # Overall full history streak
     all_time_max_streak = calculate_max_streak(ts_all)
 
-    # Frame-filtered streak
     if start_date is not None and end_date is not None:
         ts_frame = ts_all[(ts_all.dt.date >= start_date) & (ts_all.dt.date <= end_date)]
     else:
@@ -525,7 +541,6 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
 
     selected_frame_streak = calculate_max_streak(ts_frame)
 
-    # Sessions computed on the active frame
     active_ts = ts_frame if not ts_frame.empty else ts_all
     time_gaps = active_ts.diff().dt.total_seconds().to_numpy() / 60.0
     session_ids = (time_gaps > session_idle_minutes).cumsum()
@@ -662,15 +677,15 @@ if nav_mode == "What Can I Do Here?":
 # ---------------------------------------------------------
 if not has_input_data:
     st.info("👋 Upload CSV, Excel, or JSON files, or paste a public Google Sheets link in the sidebar to begin analyzing your data.")
-    st.markdown("💡 *New here? Click **💡 Guide** in the sidebar navigation above for a quick feature walkthrough and sample charts.*")
+    st.caption("🔒 **Privacy Guarantee:** All uploaded data is analyzed entirely in volatile RAM. No records are written to permanent server disk, and data is destroyed immediately when you close the tab or reset.")
     st.stop()
 
-df = parse_and_standardize(uploaded, gsheet, is_music=is_music_profile)
+# Ingest fresh dataframe strictly for this browser session
+df = parse_and_standardize_session(uploaded, gsheet, is_music=is_music_profile)
 if df.empty:
     st.warning("No records ingested. Check format and contents.")
     st.stop()
 
-# Chronological range lookup for milestone streak filtering
 valid_dates_all = pd.to_datetime(df['Date_Only'].astype(str), errors='coerce').dropna() if 'Date_Only' in df.columns else pd.Series(dtype='datetime64[ns]')
 d_start_val, d_end_val = (valid_dates_all.min().date(), valid_dates_all.max().date()) if not valid_dates_all.empty else (None, None)
 
@@ -694,7 +709,6 @@ if is_music_profile:
         p2.metric("Total Songs Skipped", f"{total_skipped:,}", help="Count of tracks ended prematurely via forward buttons or skip actions.")
         p3.metric("Full Plays", f"{full_plays:,}", help="Count of tracks played completely from start to natural finish.")
         
-        # Habit Analytics with Longest Streak in Selected Time Frame
         streaks = compute_streaks_and_sessions(df, start_date=d_start_val, end_date=d_end_val)
         if streaks:
             st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
