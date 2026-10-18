@@ -88,6 +88,8 @@ def load_config():
             "Spotify": {"is_music": True},
             "Apple Music": {"is_music": True},
             "Pandora": {"is_music": True},
+            "YouTube Music": {"is_music": True},
+            "Amazon Music": {"is_music": True},
             "Other": {"is_music": False}
         },
         "styling": {
@@ -417,8 +419,17 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             return "Spotify"
         if any(k in cols_lower for k in ['event start timestamp', 'play duration milliseconds', 'content name']):
             return "Apple Music"
+        # Pandora Fingerprint
         if any(k in cols_lower for k in ['station_name', 'station_history', 'track_title']) or ('artist_name' in cols_lower and 'album_title' in cols_lower):
             return "Pandora"
+        
+        # YouTube Music (Google Takeout) Fingerprint
+        if any(k in cols_lower for k in ['titleurl', 'subtitles']) or ('title' in cols_lower and 'header' in cols_lower):
+            return "YouTube Music"
+            
+        # Amazon Music Fingerprint
+        if any(k in cols_lower for k in ['trackname', 'songtitle']) or ('artistname' in cols_lower and 'albumtitle' in cols_lower) or any(k in cols_lower for k in ['playdate', 'eventtimestamp']):
+            return "Amazon Music"
         return None
 
     detected_platform = inspect_header_signature(uploaded, gsheet) if terms_accepted else None
@@ -501,6 +512,22 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
     # Strip and redact all IP address metadata
     df = strip_ip_addresses(df)
 
+    # Clean YouTube Music Takeout fields if present
+    if 'Track' in df.columns and df['Track'].astype(str).str.startswith("Watched ").any():
+        df['Track'] = df['Track'].astype(str).str.replace(r"^Watched\s+", "", regex=True)
+    if 'subtitles' in df.columns and 'Artist' not in df.columns:
+        def extract_yt_artist(val):
+            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                return val[0].get('name', 'Unknown Artist')
+            elif isinstance(val, str) and 'name' in val:
+                try:
+                    parsed = json.loads(val.replace("'", "\""))
+                    return parsed[0].get('name', 'Unknown Artist') if isinstance(parsed, list) else 'Unknown Artist'
+                except Exception:
+                    return val
+            return val
+        df['Artist'] = df['subtitles'].apply(extract_yt_artist)
+
     if len(df) > MAX_TOTAL_ROWS:
         st.warning(f"Dataset truncated to the first {MAX_TOTAL_ROWS:,} rows to maintain container stability.")
         df = df.iloc[:MAX_TOTAL_ROWS].copy()
@@ -516,7 +543,17 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
             'Artist Name': 'Artist', 'Container Description': 'Album', 'Album Name': 'Album',
             'Play Duration Milliseconds': 'ms_played', 'End Reason Type': 'reason_end', 'Build Version': 'Platform',
             'track_title': 'Track', 'artist_name': 'Artist', 'album_title': 'Album',
-            'datetime': 'timestamp', 'station_name': 'Platform'
+            'datetime': 'timestamp', 'station_name': 'Platform',
+            
+            # Amazon Music Aliases
+            'SongTitle': 'Track', 'TrackName': 'Track', 'Song Title': 'Track', 'Track Name': 'Track',
+            'ArtistName': 'Artist', 'Artist Name': 'Artist',
+            'AlbumTitle': 'Album', 'Album Title': 'Album',
+            'PlayDate': 'timestamp', 'EventTimestamp': 'timestamp', 'PlaybackDate': 'timestamp',
+            'Duration': 'ms_played', 'PlayDuration': 'ms_played',
+            
+            # YouTube Music Aliases
+            'title': 'Track', 'titleUrl': 'Track_URL', 'time': 'timestamp'
         }
         df = df.rename(columns={k: v for k, v in aliases.items() if k in df.columns})
 
@@ -1261,6 +1298,7 @@ with t_catalog:
         key=f"dl_{clean_export_name}",
         help="Download the filtered catalog table as a sanitized CSV file."
     )
+
 
 
 
