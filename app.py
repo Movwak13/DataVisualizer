@@ -11,6 +11,22 @@ import requests
 import psutil
 
 # ---------------------------------------------------------
+# STATE & CACHE INITIALIZATION
+# ---------------------------------------------------------
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
+def purge_and_reset_uploads():
+    if not st.session_state.get("legal_acknowledgment", False):
+        # Invalidate the file uploader buffer by changing its key
+        st.session_state.uploader_key += 1
+        # Clear all cached/persisted session variables except navigation
+        keys_to_clear = [k for k in list(st.session_state.keys()) if k not in ["nav_mode", "uploader_key", "legal_acknowledgment"]]
+        for k in keys_to_clear:
+            del st.session_state[k]
+        gc.collect()
+
+# ---------------------------------------------------------
 # LOGGING & ENVIRONMENT INITIALIZATION
 # ---------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -355,6 +371,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             "Upload Files (CSV, Excel, JSON)", 
             type=["csv", "xlsx", "xls", "json"], 
             accept_multiple_files=True,
+            key=f"uploader_{st.session_state.uploader_key}",
             help="Select streaming history files or spreadsheets. Processed in volatile memory only."
         )
         gsheet = st.text_input(
