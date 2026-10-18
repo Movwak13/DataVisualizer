@@ -31,7 +31,6 @@ if not logger.handlers:
     logger.addHandler(ch)
 
 def log_error(context: str, exc: Exception, user_msg: str):
-    # Log exception type and sanitized context without leaking user metadata/filenames
     logger.error(f"Error in {context}: {type(exc).__name__}: {str(exc)}\n{traceback.format_exc()}")
     st.sidebar.error(f"⚠️ {user_msg}")
 
@@ -307,7 +306,7 @@ chart_text = "#E5E7EB" if export_theme == "Dark Canvas" else "#111827"
 chart_grid = "#1F2937" if export_theme == "Dark Canvas" else "#E5E7EB"
 
 # ---------------------------------------------------------
-# DATA & PLATFORM INGESTION (HARDENED)
+# DATA & PLATFORM INGESTION
 # ---------------------------------------------------------
 with st.sidebar.expander("💾 Data & Platform", expanded=True):
     uploaded = st.file_uploader(
@@ -333,7 +332,6 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             return False
         clean_url = url.strip()
         parsed = urlparse(clean_url)
-        # Strict SSRF guard: scheme must be https, hostname exact match
         if parsed.scheme != "https" or parsed.netloc != "docs.google.com":
             return False
         return bool(re.match(r"^/spreadsheets/d/([a-zA-Z0-9-_]+)", parsed.path))
@@ -398,15 +396,17 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         st.caption(f"Auto-detected platform: {detected_platform}")
 
 # ---------------------------------------------------------
-# DATA SANITIZATION & SAFE EXPORT
+# OPTIMIZED VECTORIZED SANITIZATION & SAFE EXPORT
 # ---------------------------------------------------------
 def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
-    # Defend against CSV/Excel Formula Injection
+    # High-performance vectorized anti-formula injection
     df_copy = df_in.copy()
+    injection_pattern = r"^[\=\+\-\@\t\r]"
     for col in df_copy.select_dtypes(include=['object', 'string', 'category']).columns:
-        df_copy[col] = df_copy[col].astype(str).apply(
-            lambda x: f"'{x}" if x.startswith(('=', '+', '-', '@', '\t', '\r')) else x
-        )
+        s = df_copy[col].astype(str)
+        bad_mask = s.str.contains(injection_pattern, regex=True, na=False)
+        if bad_mask.any():
+            df_copy.loc[bad_mask, col] = "'" + s[bad_mask]
     csv_bytes = df_copy.to_csv(index=False).encode('utf-8')
     del df_copy
     return csv_bytes
@@ -426,7 +426,6 @@ def parse_gsheet_url(url: str):
     res.raise_for_status()
     return pd.read_csv(io.StringIO(res.text))
 
-# No @st.cache_data here: parsed data stays strictly bound to session memory
 def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True):
     frames = []
     if uploaded_files:
@@ -457,7 +456,6 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
     
     df = pd.concat(frames, ignore_index=True)
     del frames
-    gc.collect()
 
     if len(df) > MAX_TOTAL_ROWS:
         st.warning(f"Dataset truncated to the first {MAX_TOTAL_ROWS:,} rows to maintain container stability.")
@@ -518,6 +516,9 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
 
     return df
 
+# ---------------------------------------------------------
+# OPTIMIZED VECTORIZED HABIT ANALYTICS (O(N) vs O(N^2))
+# ---------------------------------------------------------
 def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=None, end_date=None):
     dt_candidates = [c for c in data_df.columns if c.endswith('_dt')]
     if not dt_candidates:
@@ -531,9 +532,9 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
     def calculate_max_streak(timestamps):
         if timestamps.empty:
             return 0
-        uniq_dates = pd.Series(timestamps.dt.date.unique()).sort_values().reset_index(drop=True)
-        if uniq_dates.empty:
-            return 0
+        uniq_dates = pd.Series(timestamps.dt.date.unique()).sort_values()
+        if len(uniq_dates) <= 1:
+            return len(uniq_dates)
         diffs = (pd.to_datetime(uniq_dates) - pd.to_datetime(uniq_dates.shift(1))).dt.days
         streak_lens = uniq_dates.groupby((diffs != 1).cumsum()).size()
         return int(streak_lens.max())
@@ -548,11 +549,22 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
     selected_frame_streak = calculate_max_streak(ts_frame)
 
     active_ts = ts_frame if not ts_frame.empty else ts_all
-    time_gaps = active_ts.diff().dt.total_seconds().to_numpy() / 60.0
-    session_ids = (time_gaps > session_idle_minutes).cumsum()
-    _, session_counts = np.unique(session_ids, return_counts=True)
-    avg_tracks_per_session = round(float(np.mean(session_counts)), 1) if len(session_counts) > 0 else 0.0
-    total_sessions = int(len(session_counts))
+    if len(active_ts) == 0:
+        return {
+            "all_time_max_streak": all_time_max_streak,
+            "selected_frame_streak": 0,
+            "total_sessions": 0,
+            "avg_tracks_per_session": 0.0
+        }
+
+    # Vectorized fast integer second diff
+    epoch_seconds = active_ts.view('int64') // 10**9
+    time_gaps_min = np.diff(epoch_seconds) / 60.0
+    session_cuts = np.where(time_gaps_min > session_idle_minutes)[0]
+    
+    total_sessions = len(session_cuts) + 1
+    session_lengths = np.diff(np.concatenate(([-1], session_cuts, [len(active_ts) - 1])))
+    avg_tracks_per_session = round(float(np.mean(session_lengths)), 1)
 
     return {
         "all_time_max_streak": all_time_max_streak,
@@ -691,17 +703,22 @@ if df.empty:
     st.warning("No records ingested. Check format and contents.")
     st.stop()
 
-valid_dates_all = pd.to_datetime(df['Date_Only'].astype(str), errors='coerce').dropna() if 'Date_Only' in df.columns else pd.Series(dtype='datetime64[ns]')
-d_start_val, d_end_val = (valid_dates_all.min().date(), valid_dates_all.max().date()) if not valid_dates_all.empty else (None, None)
+# Optimized scalar date boundary lookup (avoids re-parsing series)
+dt_col = next((c for c in df.columns if c.endswith('_dt')), None)
+if dt_col:
+    d_start_val = df[dt_col].min().date()
+    d_end_val = df[dt_col].max().date()
+else:
+    d_start_val, d_end_val = None, None
 
 if is_music_profile:
     top_tab_qa, top_tab_info = st.tabs(["⚡ Quick Analysis", "ℹ️ Data Info"])
     with top_tab_qa:
         st.markdown("<section aria-label='Music Summary Metrics'>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
-        c1.metric("Unique Artists", f"{df['Artist'].nunique():,}" if 'Artist' in df.columns else "N/A", help="Total count of distinct individual artists found across the ingested listening history.")
-        c2.metric("Unique Tracks", f"{df['Track (Artist)'].nunique():,}" if 'Track (Artist)' in df.columns else "N/A", help="Total count of unique song tracks identified.")
-        c3.metric("Total Albums", f"{df['Album (Artist)'].nunique():,}" if 'Album (Artist)' in df.columns else "N/A", help="Total count of distinct albums recorded.")
+        c1.metric("Unique Artists", f"{df['Artist'].nunique():,}" if 'Artist' in df.columns else "N/A")
+        c2.metric("Unique Tracks", f"{df['Track (Artist)'].nunique():,}" if 'Track (Artist)' in df.columns else "N/A")
+        c3.metric("Total Albums", f"{df['Album (Artist)'].nunique():,}" if 'Album (Artist)' in df.columns else "N/A")
 
         total_hours = df['Hours Played'].sum() if 'Hours Played' in df.columns else 0.0
         total_skipped = int(df['skipped'].fillna(False).sum()) if 'skipped' in df.columns else (
@@ -710,43 +727,27 @@ if is_music_profile:
         full_plays = int(df['reason_end'].astype(str).str.lower().isin(['trackdone', 'natural_end', 'end']).sum()) if 'reason_end' in df.columns else 0
 
         p1, p2, p3 = st.columns(3)
-        p1.metric("Total Hours Played", f"{total_hours:,.2f} hrs", help="Sum of play durations converted from milliseconds into total hours.")
-        p2.metric("Total Songs Skipped", f"{total_skipped:,}", help="Count of tracks ended prematurely via forward buttons or skip actions.")
-        p3.metric("Full Plays", f"{full_plays:,}", help="Count of tracks played completely from start to natural finish.")
+        p1.metric("Total Hours Played", f"{total_hours:,.2f} hrs")
+        p2.metric("Total Songs Skipped", f"{total_skipped:,}")
+        p3.metric("Full Plays", f"{full_plays:,}")
         
         streaks = compute_streaks_and_sessions(df, start_date=d_start_val, end_date=d_end_val)
         if streaks:
             st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
             s1, s2, s3, s4 = st.columns(4)
-            s1.metric(
-                "Longest Streak (All Time)", 
-                f"{streaks['all_time_max_streak']} days", 
-                help="Most consecutive calendar days with at least one play recorded across the complete dataset."
-            )
-            s2.metric(
-                "Longest Streak (Selected Frame)", 
-                f"{streaks['selected_frame_streak']} days", 
-                help="Maximum consecutive days listened within the active timeline scope."
-            )
-            s3.metric(
-                "Listening Sessions", 
-                f"{streaks['total_sessions']:,}", 
-                help="Discrete listening bursts separated by 30+ minutes of idle gap."
-            )
-            s4.metric(
-                "Avg Tracks / Session", 
-                f"{streaks['avg_tracks_per_session']}", 
-                help="Average songs listened to per session before pausing."
-            )
+            s1.metric("Longest Streak (All Time)", f"{streaks['all_time_max_streak']} days")
+            s2.metric("Longest Streak (Selected Frame)", f"{streaks['selected_frame_streak']} days")
+            s3.metric("Listening Sessions", f"{streaks['total_sessions']:,}")
+            s4.metric("Avg Tracks / Session", f"{streaks['avg_tracks_per_session']}")
             
         st.markdown("</section>", unsafe_allow_html=True)
 
     with top_tab_info:
         st.markdown("<section aria-label='Data Info Metrics'>", unsafe_allow_html=True)
         i1, i2, i3 = st.columns(3)
-        i1.metric("Total Records", f"{len(df):,}", help="Total number of raw rows successfully processed across all files.")
-        i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]), help="Number of categorical columns available for grouping, slicing, and filtering.")
-        i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled", help="Indicates whether valid chronological timestamps were detected to power timeline and heatmap views.")
+        i1.metric("Total Records", f"{len(df):,}")
+        i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
+        i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled")
         st.markdown("</section>", unsafe_allow_html=True)
 
 else:
@@ -755,23 +756,23 @@ else:
         st.markdown("<section aria-label='General Dataset Summary Metrics'>", unsafe_allow_html=True)
         num_cols_qa = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32']).columns.tolist()
         c1, c2, c3 = st.columns(3)
-        c1.metric("Total Records Ingested", f"{len(df):,}", help="Total count of rows parsed from the uploaded dataset.")
-        c2.metric("Total Attributes", len(df.columns), help="Total number of data columns identified.")
-        c3.metric("Numeric Metrics Detected", len(num_cols_qa), help="Count of quantifiable numeric fields that can be summed or averaged.")
+        c1.metric("Total Records Ingested", f"{len(df):,}")
+        c2.metric("Total Attributes", len(df.columns))
+        c3.metric("Numeric Metrics Detected", len(num_cols_qa))
 
         if num_cols_qa:
             lead_col = num_cols_qa[0]
             p1, p2, p3 = st.columns(3)
-            p1.metric(f"Total Sum ({lead_col})", f"{df[lead_col].sum():,.2f}", help=f"Aggregated sum of the primary numeric column '{lead_col}'.")
-            p2.metric(f"Average ({lead_col})", f"{df[lead_col].mean():,.2f}", help=f"Mean arithmetic average across '{lead_col}'.")
-            p3.metric(f"Max ({lead_col})", f"{df[lead_col].max():,.2f}", help=f"Highest single recorded value within '{lead_col}'.")
+            p1.metric(f"Total Sum ({lead_col})", f"{df[lead_col].sum():,.2f}")
+            p2.metric(f"Average ({lead_col})", f"{df[lead_col].mean():,.2f}")
+            p3.metric(f"Max ({lead_col})", f"{df[lead_col].max():,.2f}")
         st.markdown("</section>", unsafe_allow_html=True)
 
     with top_tab_info:
         i1, i2, i3 = st.columns(3)
-        i1.metric("Total Records", f"{len(df):,}", help="Total raw record count in dataset.")
-        i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]), help="Available categorical dimensions for breakdowns.")
-        i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled", help="Status of temporal date extraction for trends.")
+        i1.metric("Total Records", f"{len(df):,}")
+        i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
+        i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled")
 
 st.divider()
 
@@ -806,8 +807,8 @@ def render_export_bar(fig, table_df, base_name, total_rows=20):
         )
     with c2:
         try:
-            fig_dict = fig.to_dict()
-            export_fig = go.Figure(fig_dict)
+            # Low-overhead layout clone (avoids full JSON traversal)
+            export_fig = go.Figure(fig)
             export_fig.update_layout(
                 paper_bgcolor=chart_bg, plot_bgcolor=chart_bg,
                 font=dict(color=chart_text),
@@ -866,12 +867,12 @@ def apply_date_range_filter(data_frame, key_prefix):
     if not has_datetime or not enable_date_filtering:
         return data_frame
     
-    valid_dates = pd.to_datetime(data_frame['Date_Only'].astype(str), errors='coerce').dropna()
-    if valid_dates.empty:
+    dt_col_local = next((c for c in data_frame.columns if c.endswith('_dt')), None)
+    if not dt_col_local:
         return data_frame
-    
-    min_date_val = valid_dates.min().date()
-    max_date_val = valid_dates.max().date()
+
+    min_date_val = data_frame[dt_col_local].min().date()
+    max_date_val = data_frame[dt_col_local].max().date()
     if min_date_val == max_date_val:
         return data_frame
 
@@ -959,10 +960,8 @@ with t_breakdown:
         chosen_top_n = int(extracted.group()) if extracted else 20
 
     use_date_in_breakdown = has_datetime and enable_date_filtering
-    valid_dates = pd.to_datetime(df['Date_Only'].astype(str), errors='coerce').dropna() if has_datetime else pd.Series(dtype='datetime64[ns]')
-
-    if use_date_in_breakdown and not valid_dates.empty and valid_dates.min().date() != valid_dates.max().date():
-        min_date, max_date = valid_dates.min().date(), valid_dates.max().date()
+    
+    if use_date_in_breakdown and d_start_val and d_start_val != d_end_val:
         with col_cutoff:
             if is_custom:
                 c_top_sub, c_date_sub = st.columns([1, 1])
@@ -976,9 +975,9 @@ with t_breakdown:
                 )
                 start_d, end_d = c_date_sub.slider(
                     "📅 Date Range Selection:", 
-                    min_value=min_date, 
-                    max_value=max_date, 
-                    value=(min_date, max_date), 
+                    min_value=d_start_val, 
+                    max_value=d_end_val, 
+                    value=(d_start_val, d_end_val), 
                     format="YYYY-MM-DD", 
                     key="b_date_side",
                     help="Restrict the bar chart analysis to plays within this calendar window."
@@ -987,9 +986,9 @@ with t_breakdown:
                 top_n = chosen_top_n
                 start_d, end_d = st.slider(
                     "📅 Date Range Selection:", 
-                    min_value=min_date, 
-                    max_value=max_date, 
-                    value=(min_date, max_date), 
+                    min_value=d_start_val, 
+                    max_value=d_end_val, 
+                    value=(d_start_val, d_end_val), 
                     format="YYYY-MM-DD", 
                     key="b_date_side_canned",
                     help="Restrict the bar chart analysis to plays within this calendar window."
@@ -1011,41 +1010,31 @@ with t_breakdown:
                 st.markdown(f"<div style='margin-top: 26px; font-size: 14px; color: #94A3B8;'><b>Preset Active:</b> Showing {direction_label.lower()} {top_n} {group_col}s</div>", unsafe_allow_html=True)
 
     available_slice_dims = [c for c in ordered_cat_cols if c != group_col]
-    active_chart_df = df
+    
+    # Fast unified boolean mask filter
+    mask = np.ones(len(df), dtype=bool)
 
     if available_slice_dims:
         with st.expander("🔍 Filter / Slice by Specific Attribute (Optional)", expanded=False):
             col_s1, col_s2 = st.columns([1, 2])
-            slice_dim = col_s1.selectbox(
-                "Filter Dimension:", 
-                available_slice_dims, 
-                index=0, 
-                key="b_slice_dim",
-                help="Pick a secondary dimension to narrow down results (e.g. choose an Artist to only see their Tracks)."
-            )
+            slice_dim = col_s1.selectbox("Filter Dimension:", available_slice_dims, index=0, key="b_slice_dim")
             slice_vals = sorted(df[slice_dim].dropna().unique().astype(str))
-            chosen_slice = col_s2.multiselect(
-                f"Filter specific {slice_dim}s (leave blank for all):",
-                options=slice_vals,
-                default=[],
-                key="b_slice_vals",
-                help=f"Select one or more {slice_dim}s to filter the bar chart."
-            )
+            chosen_slice = col_s2.multiselect(f"Filter specific {slice_dim}s (leave blank for all):", options=slice_vals, default=[], key="b_slice_vals")
             if chosen_slice:
-                active_chart_df = active_chart_df[active_chart_df[slice_dim].astype(str).isin(chosen_slice)]
-                st.caption(f"Filtered to {len(active_chart_df):,} matching records.")
+                mask &= df[slice_dim].astype(str).isin(chosen_slice).to_numpy()
 
-    if use_date_in_breakdown and not valid_dates.empty and valid_dates.min().date() != valid_dates.max().date():
-        active_chart_df = active_chart_df[(active_chart_df['Date_Only'] >= start_d) & (active_chart_df['Date_Only'] <= end_d)]
+    if use_date_in_breakdown and d_start_val and d_start_val != d_end_val:
+        mask &= (df['Date_Only'] >= start_d).to_numpy() & (df['Date_Only'] <= end_d).to_numpy()
 
-    if 'ms_played' in active_chart_df.columns and min_play_sec > 0:
-        active_chart_df = active_chart_df[active_chart_df['ms_played'] >= (min_play_sec * 1000)]
+    if 'ms_played' in df.columns and min_play_sec > 0:
+        mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
 
     if exclude_unknowns:
-        clean_mask = ~active_chart_df[group_col].astype(str).str.strip().str.lower().isin(
+        mask &= ~df[group_col].astype(str).str.strip().str.lower().isin(
             ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
-        )
-        active_chart_df = active_chart_df[clean_mask]
+        ).to_numpy()
+
+    active_chart_df = df[mask]
 
     if calc == "Frequency / Count":
         grouped = active_chart_df.groupby(group_col, observed=True).size().reset_index(name="Count")
@@ -1063,10 +1052,6 @@ with t_breakdown:
         is_ascending_sort = ("Lowest" in ranking_direction)
         summary_top = grouped.sort_values(by=lbl, ascending=is_ascending_sort).head(top_n).copy()
         summary_top['formatted_label'] = summary_top[lbl].apply(lambda x: f"{int(x):,}" if isinstance(x, (int, float)) and float(x).is_integer() else f"{x:,.2f}")
-
-        top_entity = summary_top.iloc[0][group_col] if not summary_top.empty else "None"
-        top_val = summary_top.iloc[0][lbl] if not summary_top.empty else 0
-        st.markdown(f"<div class='sr-only' role='region' aria-label='Chart Description'>Top entity: {top_entity} with {top_val} {lbl}.</div>", unsafe_allow_html=True)
 
         rank_title_prefix = "Bottom" if is_ascending_sort else "Top"
         fig = px.bar(
@@ -1172,20 +1157,8 @@ with t_heatmap:
         filtered_h_df, _ = apply_multiselect_filter(date_filtered_h, "tab_h")
         
         axis_col1, axis_col2 = st.columns(2)
-        y_axis_choice = axis_col1.selectbox(
-            "Y-Axis:", 
-            ["Day of Week", "Date Only", "Month-Year"], 
-            index=0, 
-            key="h_y",
-            help="Select the vertical dimension used to group activity (e.g., Monday through Sunday)."
-        )
-        x_axis_choice = axis_col2.selectbox(
-            "X-Axis:", 
-            ["Hour of Day (0–23)", "Time (HH:MM Exact)", "Date Only"], 
-            index=0, 
-            key="h_x",
-            help="Select the horizontal time unit plotted against the Y-axis (e.g., 24-hour daily timeline)."
-        )
+        y_axis_choice = axis_col1.selectbox("Y-Axis:", ["Day of Week", "Date Only", "Month-Year"], index=0, key="h_y")
+        x_axis_choice = axis_col2.selectbox("X-Axis:", ["Hour of Day (0–23)", "Time (HH:MM Exact)", "Date Only"], index=0, key="h_x")
 
         col_map = {"Day of Week": "Day_of_Week", "Date Only": "Date_Only", "Month-Year": "Month_Year", "Hour of Day (0–23)": "Hour_Only", "Time (HH:MM Exact)": "Time_Only"}
         y_field, x_field = col_map[y_axis_choice], col_map[x_axis_choice]
@@ -1224,15 +1197,16 @@ with t_catalog:
         help="Select entity type (Artist, Track, Album, Country) to populate the master sorted ranking catalog."
     )
     
-    catalog_source_df = df
-    if 'ms_played' in catalog_source_df.columns and min_play_sec > 0:
-        catalog_source_df = catalog_source_df[catalog_source_df['ms_played'] >= (min_play_sec * 1000)]
+    catalog_mask = np.ones(len(df), dtype=bool)
+    if 'ms_played' in df.columns and min_play_sec > 0:
+        catalog_mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
     
     if exclude_unknowns:
-        clean_cat_mask = ~catalog_source_df[target_catalog].astype(str).str.strip().str.lower().isin(
+        catalog_mask &= ~df[target_catalog].astype(str).str.strip().str.lower().isin(
             ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
-        )
-        catalog_source_df = catalog_source_df[clean_cat_mask]
+        ).to_numpy()
+
+    catalog_source_df = df[catalog_mask]
 
     agg_dict = {'Count': (target_catalog, 'count')}
     if 'Hours Played' in catalog_source_df.columns:
