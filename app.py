@@ -437,10 +437,11 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             try:
                 first_file.seek(0)
                 fn = first_file.name.lower()
-                if fn.endswith('.csv'):
-                    cols_found.update(pd.read_csv(first_file, nrows=2).columns)
-                elif fn.endswith(('.xlsx', '.xls')):
-                    cols_found.update(pd.read_excel(first_file, nrows=2).columns)                elif fn.endswith('.json'): 
+                                if fn.endswith('.csv'): 
+                    frames.append(pd.read_csv(f))
+                elif fn.endswith(('.xlsx', '.xls')): 
+                    frames.append(pd.read_excel(f))
+                elif fn.endswith('.json'): 
                     c = json.load(f)
                     c = clean_raw_json_obj(c)
                     frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
@@ -530,10 +531,11 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
             try:
                 f.seek(0)
                 fn = f.name.lower()
-                if fn.endswith('.csv'): 
+                                if fn.endswith('.csv'): 
                     frames.append(pd.read_csv(f))
                 elif fn.endswith(('.xlsx', '.xls')): 
-                    frames.append(pd.read_excel(f))                elif fn.endswith('.json'): 
+                    frames.append(pd.read_excel(f))
+                elif fn.endswith('.json'): 
                     c = json.load(f)
                     c = clean_raw_json_obj(c)
                     frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
