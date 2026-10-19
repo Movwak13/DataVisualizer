@@ -888,7 +888,7 @@ with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
             streaks = compute_streaks_and_sessions(df, start_date=d_start_val, end_date=d_end_val)
             if streaks:
                 st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
-                s1, s2 = st.columns(2)
+                s1, s2, _ = st.columns(3)
                 s1.metric("Longest Streak", f"{streaks['longest_streak']} days")
                 s2.metric("Daily Listening Average", streaks['daily_avg'])
             st.markdown("</section>", unsafe_allow_html=True)
