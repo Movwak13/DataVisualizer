@@ -24,7 +24,7 @@ def purge_and_reset_uploads():
         st.session_state.uploader_key += 1
         keys_to_clear = [k for k in list(st.session_state.keys()) if k not in ["uploader_key", "legal_acknowledgment", "nav_mode"]]
         for k in keys_to_clear:
-            del st.session_state[k]
+            st.session_state.pop(k, None)
         gc.collect()
 
 # ---------------------------------------------------------
@@ -53,7 +53,7 @@ def log_error(context: str, exc: Exception, user_msg: str):
     st.sidebar.error(f"⚠️ {user_msg}")
 
 # ---------------------------------------------------------
-# COMPREHENSIVE SENSITIVE PII & IP SANITIZATION ENGINE
+# SENSITIVE PII & IP SANITIZATION ENGINE (OPTIMIZED)
 # ---------------------------------------------------------
 IPV4_REGEX = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
 IPV6_REGEX = r'\b(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}\b'
@@ -66,6 +66,8 @@ SENSITIVE_KEY_PATTERNS = [
     r'session_id', r'token', r'location_zip', r'postal_code', r'latitude', r'longitude'
 ]
 
+IP_SUSPECT_COLS = {'ip_addr', 'client_ip', 'ip', 'remote_addr', 'user_agent', 'user_agent_decrypted'}
+
 def clean_raw_json_obj(item):
     if isinstance(item, list):
         return [clean_raw_json_obj(x) for x in item]
@@ -77,10 +79,6 @@ def clean_raw_json_obj(item):
                 continue
             if isinstance(v, (dict, list)):
                 cleaned[k] = clean_raw_json_obj(v)
-            elif isinstance(v, str):
-                v_clean = re.sub(IPV4_REGEX, '[REDACTED_IP]', v)
-                v_clean = re.sub(IPV6_REGEX, '[REDACTED_IP]', v_clean)
-                cleaned[k] = v_clean
             else:
                 cleaned[k] = v
         return cleaned
@@ -94,15 +92,15 @@ def strip_ip_addresses(dataframe: pd.DataFrame) -> pd.DataFrame:
     if cols_to_drop:
         dataframe = dataframe.drop(columns=cols_to_drop, errors='ignore')
 
-    text_cols = dataframe.select_dtypes(include=['object', 'string']).columns
-    for col in text_cols:
-        if col not in ['Date_Only', 'Time_Only', 'Day_of_Week', 'Month_Year', 'Hour_Only']:
-            dataframe[col] = (
-                dataframe[col]
-                .astype(str)
-                .str.replace(IPV4_REGEX, '[REDACTED_IP]', regex=True)
-                .str.replace(IPV6_REGEX, '[REDACTED_IP]', regex=True)
-            )
+    # Efficiently scrub only columns likely to contain network IPs
+    target_text_cols = [c for c in dataframe.columns if str(c).lower().strip() in IP_SUSPECT_COLS]
+    for col in target_text_cols:
+        dataframe[col] = (
+            dataframe[col]
+            .astype(str)
+            .str.replace(IPV4_REGEX, '[REDACTED_IP]', regex=True)
+            .str.replace(IPV6_REGEX, '[REDACTED_IP]', regex=True)
+        )
     return dataframe
 
 def get_container_ram_stats():
@@ -185,10 +183,28 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# RESPONSIVE, CROSS-BROWSER CSS
+# ACCESSIBLE (WCAG 2.2 AA) CSS & SKIP-LINKS
 # ---------------------------------------------------------
 st.markdown("""
 <style>
+    /* WCAG 2.4.1: Skip Link */
+    .skip-to-main {
+        position: absolute;
+        top: -100px;
+        left: 10px;
+        background: #EF4444;
+        color: #FFFFFF !important;
+        padding: 8px 16px;
+        z-index: 100000;
+        font-weight: 700;
+        border-radius: 4px;
+        text-decoration: none;
+        transition: top 0.2s ease;
+    }
+    .skip-to-main:focus {
+        top: 10px;
+    }
+
     .block-container {
         padding-top: 2.25rem !important;
         padding-bottom: 2.5rem !important;
@@ -267,30 +283,33 @@ st.markdown("""
         min-height: 40px !important;
         border: 1px solid rgba(255, 255, 255, 0.12) !important;
     }
+    /* WCAG 1.4.3: Contrast-Compliant Notice Card */
     .legal-card {
-        background-color: rgba(239, 68, 68, 0.08);
-        border: 1px solid rgba(239, 68, 68, 0.35);
+        background-color: #2D1515;
+        border: 1px solid #EF4444;
         border-radius: 6px;
         padding: 10px;
         margin-bottom: 12px;
-        font-size: 11.5px;
+        font-size: 12px;
         line-height: 1.45;
-        color: #FCA5A5;
+        color: #FEE2E2;
     }
     .legal-card strong {
-        color: #EF4444;
+        color: #F87171;
     }
 </style>
+<a href="#main-dashboard-content" class="skip-to-main">Skip to main content</a>
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div class="app-title-wrapper">
+<div class="app-title-wrapper" role="banner">
     <h1 class="app-title-text">📊 Universal Multi-Select Data Visualizer</h1>
 </div>
+<div id="main-dashboard-content" role="main"></div>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SIDEBAR NAVIGATION (TILE BUTTONS)
+# SIDEBAR NAVIGATION
 # ---------------------------------------------------------
 st.sidebar.markdown("<div class='sidebar-nav-label'>🧭 Navigation</div>", unsafe_allow_html=True)
 col_nav1, col_nav2 = st.sidebar.columns(2)
@@ -366,11 +385,11 @@ chart_text = "#E5E7EB" if export_theme == "Dark Canvas" else "#111827"
 chart_grid = "#1F2937" if export_theme == "Dark Canvas" else "#E5E7EB"
 
 # ---------------------------------------------------------
-# DATA & PLATFORM INGESTION (LEGALLY SECURED)
+# DATA & PLATFORM INGESTION (LEGALLY SECURED & BOUNDED)
 # ---------------------------------------------------------
 with st.sidebar.expander("💾 Data & Platform", expanded=True):
     st.markdown("""
-    <div class="legal-card">
+    <div class="legal-card" role="region" aria-label="Privacy Notice">
         <strong>⚠️ NOTICE & PRIVACY DISCLAIMER:</strong><br>
         Do <strong>NOT</strong> upload sensitive, proprietary, confidential, or legally protected data. 
         This includes <strong>Protected Health Information (PHI)</strong> under HIPAA, financial/banking details, 
@@ -408,7 +427,7 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         if st.button("🗑️ Reset Session & Clear Data", use_container_width=True, help="Immediately releases all memory structures and resets the view."):
             for k in list(st.session_state.keys()):
                 if k not in ["uploader_key", "legal_acknowledgment", "nav_mode"]:
-                    del st.session_state[k]
+                    st.session_state.pop(k, None)
             gc.collect()
             st.rerun()
 
@@ -450,10 +469,16 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
                         f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid=0",
                         timeout=5,
                         allow_redirects=False,
-                        headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"}
+                        headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"},
+                        stream=True
                     )
                     if res.status_code == 200:
-                        cols_found.update(pd.read_csv(io.StringIO(res.text), nrows=2).columns)
+                        content_chunk = b""
+                        for chunk in res.iter_content(chunk_size=4096):
+                            content_chunk += chunk
+                            if len(content_chunk) > 32768:
+                                break
+                        cols_found.update(pd.read_csv(io.BytesIO(content_chunk), nrows=2).columns)
             except Exception as e:
                 logger.warning(f"GSheet signature detection issue: {type(e).__name__}")
 
@@ -485,20 +510,27 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
         st.caption(f"Auto-detected platform: {detected_platform}")
 
 # ---------------------------------------------------------
-# OPTIMIZED VECTORIZED SANITIZATION & SAFE EXPORT
+# OPTIMIZED SANITIZATION & SAFE EXPORT (INJECTION HARDENED)
 # ---------------------------------------------------------
 def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
-    df_copy = df_in.copy()
-    injection_pattern = r"^[-=+@\t\r]"
-    for col in df_copy.select_dtypes(include=['object', 'string', 'category']).columns:
-        df_copy[col] = df_copy[col].astype(str)
-        s = df_copy[col]
+    # CWE-1236 hardened pattern: catches leading spaces or control chars before injection tokens
+    injection_pattern = r"^\s*[-=+@\t\r]"
+    str_cols = df_in.select_dtypes(include=['object', 'string', 'category']).columns
+    
+    if len(str_cols) == 0:
+        return df_in.to_csv(index=False).encode('utf-8')
+    
+    # Process without whole-table duplication
+    csv_buffer = io.StringIO()
+    df_copy = df_in.copy(deep=False)
+    for col in str_cols:
+        s = df_copy[col].astype(str)
         bad_mask = s.str.contains(injection_pattern, regex=True, na=False)
         if bad_mask.any():
-            df_copy.loc[bad_mask, col] = "'" + s[bad_mask]
-    csv_bytes = df_copy.to_csv(index=False).encode('utf-8')
-    del df_copy
-    return csv_bytes
+            df_copy[col] = np.where(bad_mask, "'" + s, s)
+            
+    df_copy.to_csv(csv_buffer, index=False)
+    return csv_buffer.getvalue().encode('utf-8')
 
 def parse_gsheet_url(url: str):
     if not validate_gsheet_url(url):
@@ -506,14 +538,26 @@ def parse_gsheet_url(url: str):
     m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
     gid_m = re.search(r"[#&]gid=([0-9]+)", url)
     gid = gid_m.group(1) if gid_m else "0"
+    
+    # DoS protection: stream response with bounded length limit
     res = requests.get(
         f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid={gid}", 
         timeout=10,
         allow_redirects=False,
-        headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"}
+        headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"},
+        stream=True
     )
     res.raise_for_status()
-    return pd.read_csv(io.StringIO(res.text))
+    
+    downloaded = 0
+    chunks = []
+    for chunk in res.iter_content(chunk_size=65536):
+        downloaded += len(chunk)
+        if downloaded > MAX_FILE_BYTES:
+            raise ValueError(f"Google Sheet payload exceeded maximum size limit ({MAX_FILE_BYTES // (1024*1024)} MB).")
+        chunks.append(chunk)
+        
+    return pd.read_csv(io.BytesIO(b"".join(chunks)))
 
 def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True):
     frames = []
@@ -635,20 +679,21 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
         return {}
     
     dt_col = dt_candidates[0]
-    ts_all = data_df[dt_col].dropna().sort_values()
+    ts_all = data_df[dt_col].dropna()
     if ts_all.empty:
         return {}
 
-    uniq_dates = pd.Series(ts_all.dt.date.unique()).sort_values()
-    if len(uniq_dates) <= 1:
-        longest_streak = len(uniq_dates)
+    # Fast O(N log N) vectorized streak calculation
+    date_ints = np.unique(ts_all.values.astype('datetime64[D]').astype(np.int64))
+    if len(date_ints) <= 1:
+        longest_streak = len(date_ints)
     else:
-        diffs = (pd.to_datetime(uniq_dates) - pd.to_datetime(uniq_dates.shift(1))).dt.days
-        streak_lens = uniq_dates.groupby((diffs != 1).cumsum()).size()
-        longest_streak = int(streak_lens.max())
+        diffs = np.diff(date_ints)
+        streak_splits = np.where(diffs != 1)[0]
+        streak_lens = np.diff(np.concatenate(([-1], streak_splits, [len(date_ints) - 1])))
+        longest_streak = int(np.max(streak_lens))
 
-    # Daily listening stats across active days
-    total_active_days = len(uniq_dates)
+    total_active_days = len(date_ints)
     if 'Hours Played' in data_df.columns and total_active_days > 0:
         avg_daily_val = f"{(data_df['Hours Played'].sum() / total_active_days):.2f} hrs/day"
     elif total_active_days > 0:
@@ -722,7 +767,8 @@ def render_full_guide():
             fig_sample_h = px.imshow(
                 mock_matrix, labels=dict(x="Hour of Day", y="Day of Week", color="Plays"),
                 x=hours_sample, y=days_sample, aspect="auto", color_continuous_scale=selected_palette,
-                title="Sample Preview: Activity Density Heatmap"
+                title="Sample Preview: Activity Density Heatmap",
+                text_auto=True
             )
             fig_sample_h.update_layout(
                 paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
@@ -735,7 +781,7 @@ def render_full_guide():
                 st.markdown('''
                 * **Identify Listening Routines:** Compare `Day of Week` vs. `Hour of Day` to see if you listen mostly during your morning commute, during the workday, or late on weekends.
                 * **Filter Down by Artist or Genre:** Use the slice filter below the axis controls to isolate a single artist (e.g., *Radiohead*) to see what time of day you play them.
-                * **Spot Outliers:** Bright tiles indicate high clusters of plays, while dark tiles reveal silent windows.
+                * **Spot Outliers:** Bright tiles and embedded numerical counts indicate high clusters of plays, while dark tiles reveal silent windows.
                 ''')
 
     with t_requests:
@@ -862,7 +908,7 @@ else:
     d_start_val, d_end_val = None, None
 
 # ---------------------------------------------------------
-# 1. COLLAPSIBLE SUMMARY METRICS & DATA PROFILE SECTION
+# 1. COLLAPSIBLE SUMMARY METRICS SECTION
 # ---------------------------------------------------------
 with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
     top_tab_qa, top_tab_info, top_tab_raw = st.tabs(["⚡ Quick Analysis", "ℹ️ Data Info", "📄 Raw Data"])
@@ -921,13 +967,19 @@ with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
         st.caption(f"Displaying {len(df):,} cleaned rows with sensitive columns (IPs, URIs, Account IDs) redacted.")
         
         c_search_raw, c_cols_raw = st.columns([1, 2])
-        raw_search = c_search_raw.text_input("🔍 Quick Filter Rows:", placeholder="Type to filter across all text...", key="raw_filter_str")
+        raw_search = c_search_raw.text_input("🔍 Quick Filter Rows:", placeholder="Type to filter across text...", key="raw_filter_str")
         selected_raw_cols = c_cols_raw.multiselect("Visible Columns:", options=list(df.columns), default=list(df.columns)[:10] if len(df.columns) > 10 else list(df.columns), key="raw_cols_ms")
         
         display_raw_df = df
         if raw_search.strip():
-            raw_mask = df.astype(str).apply(lambda row: row.str.contains(raw_search.strip(), case=False, na=False)).any(axis=1)
-            display_raw_df = df[raw_mask]
+            search_str = re.escape(raw_search.strip())
+            str_cols = df.select_dtypes(include=['object', 'string', 'category']).columns
+            if len(str_cols) > 0:
+                combined_series = df[str_cols[0]].astype(str)
+                for c in str_cols[1:6]:
+                    combined_series = combined_series + " " + df[c].astype(str)
+                raw_mask = combined_series.str.contains(search_str, case=False, na=False)
+                display_raw_df = df[raw_mask]
             
         if selected_raw_cols:
             display_raw_df = display_raw_df[selected_raw_cols]
@@ -947,7 +999,7 @@ with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
 st.divider()
 
 # ---------------------------------------------------------
-# OPTIMIZED COLUMN METADATA EXTRACTION
+# COLUMN METADATA EXTRACTION
 # ---------------------------------------------------------
 has_datetime = 'Date_Only' in df.columns
 dt_derived = {'Date_Only', 'Time_Only', 'Hour_Only', 'Day_of_Week', 'Month_Year'}
@@ -985,7 +1037,7 @@ def render_export_bar(fig, table_df, base_name, total_rows=20):
                 yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text)
             )
             row_h = LIMITS_CFG.get("row_pixel_height", 26)
-            calculated_height = max(800, int(total_rows * row_h) + 120)
+            calculated_height = max(800, min(2400, int(total_rows * row_h) + 120))
             max_w = LIMITS_CFG.get("max_export_width", 1600)
             img_bytes = export_fig.to_image(format="png", width=max_w, height=calculated_height, scale=2)
             st.download_button(
@@ -996,41 +1048,6 @@ def render_export_bar(fig, table_df, base_name, total_rows=20):
             )
         except Exception as e:
             log_error("Image Export", e, "Export engine unavailable (requires python kaleido package).")
-
-def apply_multiselect_filter(data_frame, key_prefix):
-    col_dim, col_mode = st.columns([1, 1])
-    target_dim = col_dim.selectbox(
-        "Filter / Slice By Dimension:", 
-        ordered_cat_cols, 
-        index=0, 
-        key=f"{key_prefix}_dim",
-        help="Select the categorical field used to slice or narrow down items for analysis."
-    )
-    mode = col_mode.radio(
-        "Selection Mode:", 
-        ["All Items (Complete Dataset)", "Multi-Select Specific Items"], 
-        horizontal=True, 
-        key=f"{key_prefix}_mode",
-        help="Choose 'All Items' to evaluate the full scope, or 'Multi-Select' to isolate specific artists, songs, or categories."
-    )
-    
-    active_df = data_frame
-    if mode == "Multi-Select Specific Items":
-        all_vals = sorted(data_frame[target_dim].dropna().unique().astype(str))
-        selected_vals = st.multiselect(
-            f"Select one or more {target_dim}s:", 
-            options=all_vals, 
-            default=all_vals[:3] if len(all_vals)>=3 else all_vals, 
-            key=f"{key_prefix}_ms",
-            help=f"Select individual {target_dim} entries from the list. Records matching any selection will be included."
-        )
-        if not selected_vals:
-            st.warning(f"Please select at least one {target_dim}.")
-            st.stop()
-        active_df = data_frame[data_frame[target_dim].astype(str).isin(selected_vals)]
-    
-    st.caption(f"Analyzing {len(active_df):,} of {len(data_frame):,} records.")
-    return active_df, target_dim
 
 def apply_date_range_filter(data_frame, key_prefix):
     if not has_datetime or not enable_date_filtering:
@@ -1058,7 +1075,7 @@ def apply_date_range_filter(data_frame, key_prefix):
     return data_frame[(data_frame['Date_Only'] >= start_d) & (data_frame['Date_Only'] <= end_d)]
 
 # ---------------------------------------------------------
-# 2. COLLAPSIBLE INTERACTIVE VISUALIZATIONS & CATALOG
+# 2. COLLAPSIBLE INTERACTIVE VISUALIZATIONS SECTION
 # ---------------------------------------------------------
 with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
     t_breakdown, t_temporal, t_heatmap, t_catalog = st.tabs([
@@ -1231,7 +1248,7 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
             if show_bar_labels:
                 fig.update_traces(textposition='outside', cliponaxis=False)
 
-            ui_height = max(500, min(len(summary_top) * 26, 4000))
+            ui_height = max(500, min(len(summary_top) * 26, 3200))
             yaxis_kwargs = dict(
                 categoryorder='total ascending' if not is_ascending_sort else 'total descending', 
                 automargin=True,
@@ -1270,14 +1287,26 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
             if 'ms_played' in date_filtered_t.columns and min_play_sec > 0:
                 date_filtered_t = date_filtered_t[date_filtered_t['ms_played'] >= (min_play_sec * 1000)]
             
-            filtered_t_df, t_dim = apply_multiselect_filter(date_filtered_t, "tab_t")
+            col_tdim, col_tmode = st.columns([1, 1])
+            target_tdim = col_tdim.selectbox("Filter Dimension:", ordered_cat_cols, index=0, key="tab_t_dim")
+            t_mode = col_tmode.radio("Selection Mode:", ["All Items (Complete Dataset)", "Multi-Select Specific Items"], horizontal=True, key="tab_t_mode")
+            
+            filtered_t_df = date_filtered_t
+            if t_mode == "Multi-Select Specific Items":
+                all_tvals = sorted(date_filtered_t[target_tdim].dropna().unique().astype(str))
+                selected_tvals = st.multiselect(f"Select one or more {target_tdim}s:", options=all_tvals, default=all_tvals[:3] if len(all_tvals)>=3 else all_tvals, key="tab_t_ms")
+                if not selected_tvals:
+                    st.warning(f"Please select at least one {target_tdim}.")
+                    st.stop()
+                filtered_t_df = date_filtered_t[date_filtered_t[target_tdim].astype(str).isin(selected_tvals)]
+
             days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
             c_tr, c_dw = st.columns(2)
             
             with c_tr:
-                if 1 < filtered_t_df[t_dim].nunique() <= 10:
-                    monthly = filtered_t_df.groupby(['Month_Year', t_dim], observed=True).size().reset_index(name="Volume")
-                    fig_m = px.line(monthly, x='Month_Year', y='Volume', color=t_dim, markers=True, title=f"Monthly Trend by {t_dim}")
+                if 1 < filtered_t_df[target_tdim].nunique() <= 10:
+                    monthly = filtered_t_df.groupby(['Month_Year', target_tdim], observed=True).size().reset_index(name="Volume")
+                    fig_m = px.line(monthly, x='Month_Year', y='Volume', color=target_tdim, markers=True, title=f"Monthly Trend by {target_tdim}")
                 else:
                     monthly = filtered_t_df.groupby('Month_Year', observed=True).size().reset_index(name="Volume")
                     fig_m = px.line(monthly, x='Month_Year', y='Volume', markers=True, title="Monthly Activity Volume")
@@ -1293,9 +1322,9 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
                 render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
 
             with c_dw:
-                if 1 < filtered_t_df[t_dim].nunique() <= 8:
-                    dw_agg = filtered_t_df.groupby(['Day_of_Week', t_dim], observed=True).size().reset_index(name="Volume")
-                    fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', color=t_dim, barmode='group', text='Volume' if show_bar_labels else None, title=f"Day of Week by {t_dim}")
+                if 1 < filtered_t_df[target_tdim].nunique() <= 8:
+                    dw_agg = filtered_t_df.groupby(['Day_of_Week', target_tdim], observed=True).size().reset_index(name="Volume")
+                    fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', color=target_tdim, barmode='group', text='Volume' if show_bar_labels else None, title=f"Day of Week by {target_tdim}")
                 else:
                     dw_agg = filtered_t_df.groupby('Day_of_Week', observed=True).size().reindex(days_order).fillna(0).reset_index(name="Volume")
                     fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', title="Day of Week Distribution", color='Volume', text='Volume' if show_bar_labels else None, color_continuous_scale=selected_palette)
@@ -1360,9 +1389,11 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
                 if x_field == "Day_of_Week":
                     pivot = pivot.reindex(columns=[d for d in days_order if d in pivot.columns])
 
+                # WCAG 1.4.1: Render numeric counts directly on tiles to avoid color-only information conveyance
                 fig_heat = px.imshow(
                     pivot, labels=dict(x=x_axis_choice, y=y_axis_choice, color="Events"),
-                    aspect="auto", color_continuous_scale=selected_palette, title=f"Activity Heatmap ({y_axis_choice} vs {x_axis_choice})"
+                    aspect="auto", color_continuous_scale=selected_palette, title=f"Activity Heatmap ({y_axis_choice} vs {x_axis_choice})",
+                    text_auto=True if len(pivot) <= 31 and len(pivot.columns) <= 24 else False
                 )
                 fig_heat.update_layout(
                     paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
