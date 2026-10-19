@@ -683,7 +683,7 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
     }
 
 # ---------------------------------------------------------
-# GUIDE RENDERING ENGINE (OVERVIEW & REQUEST TABS)
+# GUIDE RENDERING ENGINE (OVERVIEW, REQUEST, & SHEET TABS)
 # ---------------------------------------------------------
 def render_full_guide():
     st.markdown("### 💡 What Can I Do Here?")
@@ -852,7 +852,6 @@ def render_full_guide():
             *Note: For general non-music datasets, select **Other** under "Dataset Platform" to chart any numeric or categorical column.*
             ''')
 
-# If user selected Guide in sidebar, render guide and stop
 if nav_mode == "What Can I Do Here?":
     render_full_guide()
     st.stop()
@@ -883,7 +882,9 @@ if dt_col:
 else:
     d_start_val, d_end_val = None, None
 
-# Top KPI & Metric Tabs inside a Collapsible Section
+# ---------------------------------------------------------
+# 1. COLLAPSIBLE SUMMARY METRICS & DATA PROFILE SECTION
+# ---------------------------------------------------------
 with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
     top_tab_qa, top_tab_info, top_tab_raw = st.tabs(["⚡ Quick Analysis", "ℹ️ Data Info", "📄 Raw Data"])
     with top_tab_qa:
@@ -910,7 +911,7 @@ with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
                 st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
                 s1, s2, s3, s4 = st.columns(4)
                 s1.metric("Longest Streak (All Time)", f"{streaks['all_time_max_streak']} days")
-                s1.metric("Longest Streak (Selected Frame)", f"{streaks['selected_frame_streak']} days")
+                s2.metric("Longest Streak (Selected Frame)", f"{streaks['selected_frame_streak']} days")
                 s3.metric("Listening Sessions", f"{streaks['total_sessions']:,}")
                 s4.metric("Avg Tracks / Session", f"{streaks['avg_tracks_per_session']}")
             st.markdown("</section>", unsafe_allow_html=True)
@@ -965,29 +966,6 @@ with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
             "text/csv",
             key="dl_raw_table"
         )
-    else:
-        st.markdown("<section aria-label='General Dataset Summary Metrics'>", unsafe_allow_html=True)
-        num_cols_qa = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32']).columns.tolist()
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Records Ingested", f"{len(df):,}")
-        c2.metric("Total Attributes", len(df.columns))
-        c3.metric("Numeric Metrics Detected", len(num_cols_qa))
-
-        if num_cols_qa:
-            lead_col = num_cols_qa[0]
-            p1, p2, p3 = st.columns(3)
-            p1.metric(f"Total Sum ({lead_col})", f"{df[lead_col].sum():,.2f}")
-            p2.metric(f"Average ({lead_col})", f"{df[lead_col].mean():,.2f}")
-            p3.metric(f"Max ({lead_col})", f"{df[lead_col].max():,.2f}")
-        st.markdown("</section>", unsafe_allow_html=True)
-
-with top_tab_info:
-    st.markdown("<section aria-label='Data Info Metrics'>", unsafe_allow_html=True)
-    i1, i2, i3 = st.columns(3)
-    i1.metric("Total Records", f"{len(df):,}")
-    i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
-    i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled")
-    st.markdown("</section>", unsafe_allow_html=True)
 
 st.divider()
 
@@ -1103,10 +1081,10 @@ def apply_date_range_filter(data_frame, key_prefix):
     return data_frame[(data_frame['Date_Only'] >= start_d) & (data_frame['Date_Only'] <= end_d)]
 
 # ---------------------------------------------------------
-# LOWER DASHBOARD VISUALIZERS
+# 2. COLLAPSIBLE INTERACTIVE VISUALIZATIONS & CATALOG
 # ---------------------------------------------------------
 with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
-        t_breakdown, t_temporal, t_heatmap, t_catalog = st.tabs([
+    t_breakdown, t_temporal, t_heatmap, t_catalog = st.tabs([
         "📊 Multi-Select Breakdowns",
         "📈 Multi-Select Time Trends",
         "🔥 Multi-Select Heatmaps",
@@ -1175,7 +1153,7 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
             chosen_top_n = int(extracted.group()) if extracted else 20
 
         use_date_in_breakdown = has_datetime and enable_date_filtering
-    
+        
         if use_date_in_breakdown and d_start_val and d_start_val != d_end_val:
             with col_cutoff:
                 if is_custom:
@@ -1314,11 +1292,11 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
             date_filtered_t = apply_date_range_filter(df, "trends")
             if 'ms_played' in date_filtered_t.columns and min_play_sec > 0:
                 date_filtered_t = date_filtered_t[date_filtered_t['ms_played'] >= (min_play_sec * 1000)]
-        
+            
             filtered_t_df, t_dim = apply_multiselect_filter(date_filtered_t, "tab_t")
             days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
             c_tr, c_dw = st.columns(2)
-        
+            
             with c_tr:
                 if 1 < filtered_t_df[t_dim].nunique() <= 10:
                     monthly = filtered_t_df.groupby(['Month_Year', t_dim], observed=True).size().reset_index(name="Volume")
@@ -1326,7 +1304,7 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
                 else:
                     monthly = filtered_t_df.groupby('Month_Year', observed=True).size().reset_index(name="Volume")
                     fig_m = px.line(monthly, x='Month_Year', y='Volume', markers=True, title="Monthly Activity Volume")
-            
+                
                 fig_m.update_layout(
                     paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
                     xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
@@ -1344,7 +1322,7 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
                 else:
                     dw_agg = filtered_t_df.groupby('Day_of_Week', observed=True).size().reindex(days_order).fillna(0).reset_index(name="Volume")
                     fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', title="Day of Week Distribution", color='Volume', text='Volume' if show_bar_labels else None, color_continuous_scale=selected_palette)
-            
+                
                 if show_bar_labels:
                     fig_dw.update_traces(textposition='outside', cliponaxis=False)
                 fig_dw.update_layout(
@@ -1366,12 +1344,11 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
             date_filtered_h = apply_date_range_filter(df, "heatmap")
             if 'ms_played' in date_filtered_h.columns and min_play_sec > 0:
                 date_filtered_h = date_filtered_h[date_filtered_h['ms_played'] >= (min_play_sec * 1000)]
-            
+                
             axis_col1, axis_col2 = st.columns(2)
             y_axis_choice = axis_col1.selectbox("Y-Axis:", ["Day of Week", "Date Only", "Month-Year"], index=0, key="h_y")
             x_axis_choice = axis_col2.selectbox("X-Axis:", ["Hour of Day (0–23)", "Time (HH:MM Exact)", "Date Only"], index=0, key="h_x")
 
-            # Slicer matching the Breakdown tab: below axis options in an expander
             available_slice_dims_h = [c for c in ordered_cat_cols]
             mask_h = np.ones(len(date_filtered_h), dtype=bool)
 
@@ -1429,11 +1406,11 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
             key="cat_picker",
             help="Select entity type (Artist, Track, Album, Country) to populate the master sorted ranking catalog."
         )
-    
+        
         catalog_mask = np.ones(len(df), dtype=bool)
         if 'ms_played' in df.columns and min_play_sec > 0:
             catalog_mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
-    
+        
         if exclude_unknowns:
             catalog_mask &= ~df[target_catalog].astype(str).str.strip().str.lower().isin(
                 ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
@@ -1485,7 +1462,7 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
         )
 
         st.dataframe(filtered_catalog.iloc[start_idx:end_idx], use_container_width=True, hide_index=True)
-    
+        
         clean_export_name = target_catalog.lower().replace(' ', '_').replace('(', '').replace(')', '')
         st.download_button(
             f"📥 Download Full {target_catalog} Catalog (CSV)",
