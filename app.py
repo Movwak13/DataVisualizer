@@ -883,36 +883,88 @@ if dt_col:
 else:
     d_start_val, d_end_val = None, None
 
-# Top KPI & Metric Tabs
-top_tab_qa, top_tab_info = st.tabs(["⚡ Quick Analysis", "ℹ️ Data Info"])
-with top_tab_qa:
-    if is_music_profile:
-        st.markdown("<section aria-label='Music Summary Metrics'>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Unique Artists", f"{df['Artist'].nunique():,}" if 'Artist' in df.columns else "N/A")
-        c2.metric("Unique Tracks", f"{df['Track (Artist)'].nunique():,}" if 'Track (Artist)' in df.columns else "N/A")
-        c3.metric("Total Albums", f"{df['Album (Artist)'].nunique():,}" if 'Album (Artist)' in df.columns else "N/A")
+# Top KPI & Metric Tabs inside a Collapsible Section
+with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
+    top_tab_qa, top_tab_info, top_tab_raw = st.tabs(["⚡ Quick Analysis", "ℹ️ Data Info", "📄 Raw Data"])
+    with top_tab_qa:
+        if is_music_profile:
+            st.markdown("<section aria-label='Music Summary Metrics'>", unsafe_allow_html=True)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Unique Artists", f"{df['Artist'].nunique():,}" if 'Artist' in df.columns else "N/A")
+            c2.metric("Unique Tracks", f"{df['Track (Artist)'].nunique():,}" if 'Track (Artist)' in df.columns else "N/A")
+            c3.metric("Total Albums", f"{df['Album (Artist)'].nunique():,}" if 'Album (Artist)' in df.columns else "N/A")
 
-        total_hours = df['Hours Played'].sum() if 'Hours Played' in df.columns else 0.0
-        total_skipped = int(df['skipped'].fillna(False).sum()) if 'skipped' in df.columns else (
-            int(df['reason_end'].astype(str).str.lower().isin(['fwdbtn', 'manual_skip', 'skip']).sum()) if 'reason_end' in df.columns else 0
-        )
-        full_plays = int(df['reason_end'].astype(str).str.lower().isin(['trackdone', 'natural_end', 'end']).sum()) if 'reason_end' in df.columns else 0
+            total_hours = df['Hours Played'].sum() if 'Hours Played' in df.columns else 0.0
+            total_skipped = int(df['skipped'].fillna(False).sum()) if 'skipped' in df.columns else (
+                int(df['reason_end'].astype(str).str.lower().isin(['fwdbtn', 'manual_skip', 'skip']).sum()) if 'reason_end' in df.columns else 0
+            )
+            full_plays = int(df['reason_end'].astype(str).str.lower().isin(['trackdone', 'natural_end', 'end']).sum()) if 'reason_end' in df.columns else 0
 
-        p1, p2, p3 = st.columns(3)
-        p1.metric("Total Hours Played", f"{total_hours:,.2f} hrs")
-        p2.metric("Total Songs Skipped", f"{total_skipped:,}")
-        p3.metric("Full Plays", f"{full_plays:,}")
-        
-        streaks = compute_streaks_and_sessions(df, start_date=d_start_val, end_date=d_end_val)
-        if streaks:
-            st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
-            s1, s2, s3, s4 = st.columns(4)
-            s1.metric("Longest Streak (All Time)", f"{streaks['all_time_max_streak']} days")
-            s2.metric("Longest Streak (Selected Frame)", f"{streaks['selected_frame_streak']} days")
-            s3.metric("Listening Sessions", f"{streaks['total_sessions']:,}")
-            s4.metric("Avg Tracks / Session", f"{streaks['avg_tracks_per_session']}")
+            p1, p2, p3 = st.columns(3)
+            p1.metric("Total Hours Played", f"{total_hours:,.2f} hrs")
+            p2.metric("Total Songs Skipped", f"{total_skipped:,}")
+            p3.metric("Full Plays", f"{full_plays:,}")
+            
+            streaks = compute_streaks_and_sessions(df, start_date=d_start_val, end_date=d_end_val)
+            if streaks:
+                st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
+                s1, s2, s3, s4 = st.columns(4)
+                s1.metric("Longest Streak (All Time)", f"{streaks['all_time_max_streak']} days")
+                s1.metric("Longest Streak (Selected Frame)", f"{streaks['selected_frame_streak']} days")
+                s3.metric("Listening Sessions", f"{streaks['total_sessions']:,}")
+                s4.metric("Avg Tracks / Session", f"{streaks['avg_tracks_per_session']}")
+            st.markdown("</section>", unsafe_allow_html=True)
+        else:
+            st.markdown("<section aria-label='General Dataset Summary Metrics'>", unsafe_allow_html=True)
+            num_cols_qa = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32']).columns.tolist()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Records Ingested", f"{len(df):,}")
+            c2.metric("Total Attributes", len(df.columns))
+            c3.metric("Numeric Metrics Detected", len(num_cols_qa))
+
+            if num_cols_qa:
+                lead_col = num_cols_qa[0]
+                p1, p2, p3 = st.columns(3)
+                p1.metric(f"Total Sum ({lead_col})", f"{df[lead_col].sum():,.2f}")
+                p2.metric(f"Average ({lead_col})", f"{df[lead_col].mean():,.2f}")
+                p3.metric(f"Max ({lead_col})", f"{df[lead_col].max():,.2f}")
+            st.markdown("</section>", unsafe_allow_html=True)
+
+    with top_tab_info:
+        st.markdown("<section aria-label='Data Info Metrics'>", unsafe_allow_html=True)
+        i1, i2, i3 = st.columns(3)
+        i1.metric("Total Records", f"{len(df):,}")
+        i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
+        i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled")
         st.markdown("</section>", unsafe_allow_html=True)
+
+    with top_tab_raw:
+        st.markdown("#### 📄 Uploaded Ingested Data")
+        st.caption(f"Displaying {len(df):,} cleaned rows with sensitive columns (IPs, URIs, Account IDs) redacted.")
+        
+        c_search_raw, c_cols_raw = st.columns([1, 2])
+        raw_search = c_search_raw.text_input("🔍 Quick Filter Rows:", placeholder="Type to filter across all text...", key="raw_filter_str")
+        selected_raw_cols = c_cols_raw.multiselect("Visible Columns:", options=list(df.columns), default=list(df.columns)[:10] if len(df.columns) > 10 else list(df.columns), key="raw_cols_ms")
+        
+        display_raw_df = df
+        if raw_search.strip():
+            raw_mask = df.astype(str).apply(lambda row: row.str.contains(raw_search.strip(), case=False, na=False)).any(axis=1)
+            display_raw_df = df[raw_mask]
+            
+        if selected_raw_cols:
+            display_raw_df = display_raw_df[selected_raw_cols]
+            
+        st.dataframe(display_raw_df.head(1000), use_container_width=True, hide_index=True)
+        if len(display_raw_df) > 1000:
+            st.caption(f"Showing first 1,000 of {len(display_raw_df):,} matching rows for preview performance.")
+            
+        st.download_button(
+            "📥 Download Ingested Dataset (CSV)",
+            sanitize_csv_data(display_raw_df),
+            "ingested_data_clean.csv",
+            "text/csv",
+            key="dl_raw_table"
+        )
     else:
         st.markdown("<section aria-label='General Dataset Summary Metrics'>", unsafe_allow_html=True)
         num_cols_qa = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32']).columns.tolist()
@@ -1053,392 +1105,393 @@ def apply_date_range_filter(data_frame, key_prefix):
 # ---------------------------------------------------------
 # LOWER DASHBOARD VISUALIZERS
 # ---------------------------------------------------------
-t_breakdown, t_temporal, t_heatmap, t_catalog = st.tabs([
-    "📊 Multi-Select Breakdowns",
-    "📈 Multi-Select Time Trends",
-    "🔥 Multi-Select Heatmaps",
-    "📋 Catalog & Rankings"
-])
+with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
+        t_breakdown, t_temporal, t_heatmap, t_catalog = st.tabs([
+        "📊 Multi-Select Breakdowns",
+        "📈 Multi-Select Time Trends",
+        "🔥 Multi-Select Heatmaps",
+        "📋 Catalog & Rankings"
+    ])
 
-# --- TAB 1: BREAKDOWNS ---
-with t_breakdown:
-    st.subheader("Category Breakdown with Multi-Selection")
+    # --- TAB 1: BREAKDOWNS ---
+    with t_breakdown:
+        st.subheader("Category Breakdown with Multi-Selection")
 
-    c_group, c_calc, c_num, c_duration = st.columns([1.2, 1.2, 1.2, 1.4])
-    group_col = c_group.selectbox(
-        "📊 Select Data to Chart (Y-Axis):", 
-        ordered_cat_cols, 
-        index=0, 
-        key="b_group",
-        help="Primary category to plot on the vertical Y-axis (e.g., Artist, Track, Album)."
-    )
-    calc = c_calc.selectbox(
-        "Calculation:", 
-        ["Frequency / Count", "Sum of Column", "Average of Column"], 
-        key="b_calc",
-        help="Aggregation formula: Count totals plays, Sum totals numeric columns, Average calculates the mean."
-    )
-    val_c = c_num.selectbox(
-        "Numeric Column:", 
-        num_cols, 
-        key="b_val",
-        help="Select numeric column to sum or average when not using frequency count."
-    ) if calc != "Frequency / Count" else None
-
-    min_play_sec = c_duration.slider(
-        "Min Play Duration (Sec):",
-        min_value=0,
-        max_value=60,
-        value=30,
-        step=5,
-        key="b_min_duration",
-        help="Filter out accidental skips and scrubbing by ignoring track plays shorter than this threshold."
-    )
-
-    group_lower = group_col.lower()
-    if "artist" in group_lower and "album" not in group_lower and "track" not in group_lower:
-        canned_options = ["Custom (Use Slider)", "Top 50 Artists", "Top 100 Artists", "Top 250 Artists", "Top 500 Artists"]
-    elif "track" in group_lower or "song" in group_lower:
-        canned_options = ["Custom (Use Slider)", "Top 50 Songs", "Top 100 Songs", "Top 250 Songs", "Top 500 Songs"]
-    elif "album" in group_lower:
-        canned_options = ["Custom (Use Slider)", "Top 10 Albums", "Top 25 Albums", "Top 50 Albums", "Top 100 Albums"]
-    else:
-        canned_options = ["Custom (Use Slider)"]
-
-    col_quick, col_cutoff = st.columns([1, 2])
-    quick_choice = col_quick.selectbox(
-        "⚡ Quick Visuals Preset:",
-        canned_options,
-        index=0,
-        key="b_quick_canned",
-        help="Instant leaderboard presets for this category, or choose Custom to manually control the count."
-    )
-
-    is_custom = (quick_choice == "Custom (Use Slider)")
-    if is_custom:
-        chosen_top_n = None
-    else:
-        extracted = re.search(r"\d+", quick_choice)
-        chosen_top_n = int(extracted.group()) if extracted else 20
-
-    use_date_in_breakdown = has_datetime and enable_date_filtering
-    
-    if use_date_in_breakdown and d_start_val and d_start_val != d_end_val:
-        with col_cutoff:
-            if is_custom:
-                c_top_sub, c_date_sub = st.columns([1, 1])
-                top_n = c_top_sub.slider(
-                    "Display Limit (Max 500):", 
-                    min_value=5, 
-                    max_value=500, 
-                    value=20, 
-                    key="b_top_side",
-                    help="Adjust how many ranked entries appear on the chart."
-                )
-                start_d, end_d = c_date_sub.slider(
-                    "📅 Date Range Selection:", 
-                    min_value=d_start_val, 
-                    max_value=d_end_val, 
-                    value=(d_start_val, d_end_val), 
-                    format="YYYY-MM-DD", 
-                    key="b_date_side",
-                    help="Restrict the bar chart analysis to plays within this calendar window."
-                )
-            else:
-                top_n = chosen_top_n
-                start_d, end_d = st.slider(
-                    "📅 Date Range Selection:", 
-                    min_value=d_start_val, 
-                    max_value=d_end_val, 
-                    value=(d_start_val, d_end_val), 
-                    format="YYYY-MM-DD", 
-                    key="b_date_side_canned",
-                    help="Restrict the bar chart analysis to plays within this calendar window."
-                )
-    else:
-        with col_cutoff:
-            if is_custom:
-                top_n = st.slider(
-                    "Display Limit (Max 500):", 
-                    min_value=5, 
-                    max_value=500, 
-                    value=20, 
-                    key="b_top_solo",
-                    help="Adjust how many ranked entries appear on the chart."
-                )
-            else:
-                top_n = chosen_top_n
-                direction_label = "Bottom" if "Lowest" in ranking_direction else "Top"
-                st.markdown(f"<div style='margin-top: 26px; font-size: 14px; color: #94A3B8;'><b>Preset Active:</b> Showing {direction_label.lower()} {top_n} {group_col}s</div>", unsafe_allow_html=True)
-
-    available_slice_dims = [c for c in ordered_cat_cols if c != group_col]
-    mask = np.ones(len(df), dtype=bool)
-
-    if available_slice_dims:
-        with st.expander("🔍 Filter / Slice by Specific Attribute (Optional)", expanded=False):
-            col_s1, col_s2 = st.columns([1, 2])
-            slice_dim = col_s1.selectbox("Filter Dimension:", available_slice_dims, index=0, key="b_slice_dim")
-            slice_vals = sorted(df[slice_dim].dropna().unique().astype(str))
-            chosen_slice = col_s2.multiselect(f"Filter specific {slice_dim}s (leave blank for all):", options=slice_vals, default=[], key="b_slice_vals")
-            if chosen_slice:
-                mask &= df[slice_dim].astype(str).isin(chosen_slice).to_numpy()
-
-    if use_date_in_breakdown and d_start_val and d_start_val != d_end_val:
-        mask &= (df['Date_Only'] >= start_d).to_numpy() & (df['Date_Only'] <= end_d).to_numpy()
-
-    if 'ms_played' in df.columns and min_play_sec > 0:
-        mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
-
-    if exclude_unknowns:
-        mask &= ~df[group_col].astype(str).str.strip().str.lower().isin(
-            ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
-        ).to_numpy()
-
-    active_chart_df = df[mask]
-
-    if calc == "Frequency / Count":
-        grouped = active_chart_df.groupby(group_col, observed=True).size().reset_index(name="Count")
-        lbl = "Count"
-    elif calc == "Sum of Column" and val_c:
-        grouped = active_chart_df.groupby(group_col, observed=True)[val_c].sum().round(2).reset_index(name=f"Sum_{val_c}")
-        lbl = f"Sum_{val_c}"
-    elif calc == "Average of Column" and val_c:
-        grouped = active_chart_df.groupby(group_col, observed=True)[val_c].mean().round(2).reset_index(name=f"Avg_{val_c}")
-        lbl = f"Avg_{val_c}"
-    else: 
-        grouped = pd.DataFrame(); lbl = ""
-
-    if not grouped.empty:
-        is_ascending_sort = ("Lowest" in ranking_direction)
-        summary_top = grouped.sort_values(by=lbl, ascending=is_ascending_sort).head(top_n).copy()
-        summary_top['formatted_label'] = summary_top[lbl].apply(lambda x: f"{int(x):,}" if isinstance(x, (int, float)) and float(x).is_integer() else f"{x:,.2f}")
-
-        rank_title_prefix = "Bottom" if is_ascending_sort else "Top"
-        fig = px.bar(
-            summary_top, x=lbl, y=group_col, orientation='h', color=lbl, 
-            text='formatted_label' if show_bar_labels else None,
-            color_continuous_scale=selected_palette, 
-            title=f"{rank_title_prefix} {len(summary_top)} {group_col} by {lbl}"
+        c_group, c_calc, c_num, c_duration = st.columns([1.2, 1.2, 1.2, 1.4])
+        group_col = c_group.selectbox(
+            "📊 Select Data to Chart (Y-Axis):", 
+            ordered_cat_cols, 
+            index=0, 
+            key="b_group",
+            help="Primary category to plot on the vertical Y-axis (e.g., Artist, Track, Album)."
         )
-        if show_bar_labels:
-            fig.update_traces(textposition='outside', cliponaxis=False)
-
-        ui_height = max(500, min(len(summary_top) * 26, 4000))
-        yaxis_kwargs = dict(
-            categoryorder='total ascending' if not is_ascending_sort else 'total descending', 
-            automargin=True,
-            showgrid=show_gridlines,
-            gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)"
+        calc = c_calc.selectbox(
+            "Calculation:", 
+            ["Frequency / Count", "Sum of Column", "Average of Column"], 
+            key="b_calc",
+            help="Aggregation formula: Count totals plays, Sum totals numeric columns, Average calculates the mean."
         )
-        if len(summary_top) <= 250:
-            yaxis_kwargs['dtick'] = 1
+        val_c = c_num.selectbox(
+            "Numeric Column:", 
+            num_cols, 
+            key="b_val",
+            help="Select numeric column to sum or average when not using frequency count."
+        ) if calc != "Frequency / Count" else None
 
-        fig.update_layout(
-            paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-            yaxis=yaxis_kwargs, 
-            xaxis=dict(
-                automargin=True, 
-                gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", 
-                showgrid=show_gridlines, 
-                color=chart_text,
-                type="log" if use_log_scale else "linear"
-            ),
-            margin=dict(l=max(200, min(int(summary_top[group_col].astype(str).str.len().max() * 9.5), 450)), r=80, t=50, b=50),
-            height=ui_height,
-            autosize=True
+        min_play_sec = c_duration.slider(
+            "Min Play Duration (Sec):",
+            min_value=0,
+            max_value=60,
+            value=30,
+            step=5,
+            key="b_min_duration",
+            help="Filter out accidental skips and scrubbing by ignoring track plays shorter than this threshold."
         )
-        st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
-        render_export_bar(fig, grouped, f"breakdown_{group_col}_{lbl}", total_rows=len(summary_top))
-        with st.expander("View Data Table"):
-            st.dataframe(summary_top.drop(columns=['formatted_label'], errors='ignore'), hide_index=True, use_container_width=True)
 
-# --- TAB 2: TEMPORAL TRENDS ---
-with t_temporal:
-    st.subheader("Time Series Trends with Multi-Selection")
-    if not has_datetime:
-        st.info("No timestamp field detected in this dataset.")
-    else:
-        date_filtered_t = apply_date_range_filter(df, "trends")
-        if 'ms_played' in date_filtered_t.columns and min_play_sec > 0:
-            date_filtered_t = date_filtered_t[date_filtered_t['ms_played'] >= (min_play_sec * 1000)]
-        
-        filtered_t_df, t_dim = apply_multiselect_filter(date_filtered_t, "tab_t")
-        days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        c_tr, c_dw = st.columns(2)
-        
-        with c_tr:
-            if 1 < filtered_t_df[t_dim].nunique() <= 10:
-                monthly = filtered_t_df.groupby(['Month_Year', t_dim], observed=True).size().reset_index(name="Volume")
-                fig_m = px.line(monthly, x='Month_Year', y='Volume', color=t_dim, markers=True, title=f"Monthly Trend by {t_dim}")
-            else:
-                monthly = filtered_t_df.groupby('Month_Year', observed=True).size().reset_index(name="Volume")
-                fig_m = px.line(monthly, x='Month_Year', y='Volume', markers=True, title="Monthly Activity Volume")
-            
-            fig_m.update_layout(
-                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
-                yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-                margin=dict(l=60, r=40, t=50, b=50),
-                autosize=True
-            )
-            st.plotly_chart(fig_m, use_container_width=True, config={'responsive': True})
-            render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
-
-        with c_dw:
-            if 1 < filtered_t_df[t_dim].nunique() <= 8:
-                dw_agg = filtered_t_df.groupby(['Day_of_Week', t_dim], observed=True).size().reset_index(name="Volume")
-                fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', color=t_dim, barmode='group', text='Volume' if show_bar_labels else None, title=f"Day of Week by {t_dim}")
-            else:
-                dw_agg = filtered_t_df.groupby('Day_of_Week', observed=True).size().reindex(days_order).fillna(0).reset_index(name="Volume")
-                fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', title="Day of Week Distribution", color='Volume', text='Volume' if show_bar_labels else None, color_continuous_scale=selected_palette)
-            
-            if show_bar_labels:
-                fig_dw.update_traces(textposition='outside', cliponaxis=False)
-            fig_dw.update_layout(
-                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
-                yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-                margin=dict(l=60, r=40, t=50, b=50),
-                autosize=True
-            )
-            st.plotly_chart(fig_dw, use_container_width=True, config={'responsive': True})
-            render_export_bar(fig_dw, dw_agg, "dow_activity", total_rows=10)
-
-# --- TAB 3: HEATMAPS ---
-with t_heatmap:
-    st.subheader("Temporal Density Heatmap")
-    if not has_datetime:
-        st.info("No timestamp field detected in this dataset.")
-    else:
-        date_filtered_h = apply_date_range_filter(df, "heatmap")
-        if 'ms_played' in date_filtered_h.columns and min_play_sec > 0:
-            date_filtered_h = date_filtered_h[date_filtered_h['ms_played'] >= (min_play_sec * 1000)]
-            
-        axis_col1, axis_col2 = st.columns(2)
-        y_axis_choice = axis_col1.selectbox("Y-Axis:", ["Day of Week", "Date Only", "Month-Year"], index=0, key="h_y")
-        x_axis_choice = axis_col2.selectbox("X-Axis:", ["Hour of Day (0–23)", "Time (HH:MM Exact)", "Date Only"], index=0, key="h_x")
-
-        # Slicer matching the Breakdown tab: below axis options in an expander
-        available_slice_dims_h = [c for c in ordered_cat_cols]
-        mask_h = np.ones(len(date_filtered_h), dtype=bool)
-
-        if available_slice_dims_h:
-            with st.expander("🔍 Filter / Slice by Specific Attribute (Optional)", expanded=False):
-                col_hs1, col_hs2 = st.columns([1, 2])
-                slice_dim_h = col_hs1.selectbox("Filter Dimension:", available_slice_dims_h, index=0, key="h_slice_dim")
-                slice_vals_h = sorted(date_filtered_h[slice_dim_h].dropna().unique().astype(str))
-                chosen_slice_h = col_hs2.multiselect(
-                    f"Filter specific {slice_dim_h}s (leave blank for all):",
-                    options=slice_vals_h,
-                    default=[],
-                    key="h_slice_vals"
-                )
-                if chosen_slice_h:
-                    mask_h &= date_filtered_h[slice_dim_h].astype(str).isin(chosen_slice_h).to_numpy()
-
-        filtered_h_df = date_filtered_h[mask_h]
-
-        col_map = {"Day of Week": "Day_of_Week", "Date Only": "Date_Only", "Month-Year": "Month_Year", "Hour of Day (0–23)": "Hour_Only", "Time (HH:MM Exact)": "Time_Only"}
-        y_field, x_field = col_map[y_axis_choice], col_map[x_axis_choice]
-
-        if y_field == x_field:
-            st.warning("Select distinct dimensions for X and Y axes.")
-        elif filtered_h_df.empty:
-            st.warning("No records match the current filter selection.")
+        group_lower = group_col.lower()
+        if "artist" in group_lower and "album" not in group_lower and "track" not in group_lower:
+            canned_options = ["Custom (Use Slider)", "Top 50 Artists", "Top 100 Artists", "Top 250 Artists", "Top 500 Artists"]
+        elif "track" in group_lower or "song" in group_lower:
+            canned_options = ["Custom (Use Slider)", "Top 50 Songs", "Top 100 Songs", "Top 250 Songs", "Top 500 Songs"]
+        elif "album" in group_lower:
+            canned_options = ["Custom (Use Slider)", "Top 10 Albums", "Top 25 Albums", "Top 50 Albums", "Top 100 Albums"]
         else:
-            pivot = filtered_h_df.groupby([y_field, x_field], observed=True).size().unstack(fill_value=0).astype(np.int32)
-            days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-            if y_field == "Day_of_Week":
-                pivot = pivot.reindex([d for d in days_order if d in pivot.index])
-            if x_field == "Day_of_Week":
-                pivot = pivot.reindex(columns=[d for d in days_order if d in pivot.columns])
+            canned_options = ["Custom (Use Slider)"]
 
-            fig_heat = px.imshow(
-                pivot, labels=dict(x=x_axis_choice, y=y_axis_choice, color="Events"),
-                aspect="auto", color_continuous_scale=selected_palette, title=f"Activity Heatmap ({y_axis_choice} vs {x_axis_choice})"
+        col_quick, col_cutoff = st.columns([1, 2])
+        quick_choice = col_quick.selectbox(
+            "⚡ Quick Visuals Preset:",
+            canned_options,
+            index=0,
+            key="b_quick_canned",
+            help="Instant leaderboard presets for this category, or choose Custom to manually control the count."
+        )
+
+        is_custom = (quick_choice == "Custom (Use Slider)")
+        if is_custom:
+            chosen_top_n = None
+        else:
+            extracted = re.search(r"\d+", quick_choice)
+            chosen_top_n = int(extracted.group()) if extracted else 20
+
+        use_date_in_breakdown = has_datetime and enable_date_filtering
+    
+        if use_date_in_breakdown and d_start_val and d_start_val != d_end_val:
+            with col_cutoff:
+                if is_custom:
+                    c_top_sub, c_date_sub = st.columns([1, 1])
+                    top_n = c_top_sub.slider(
+                        "Display Limit (Max 500):", 
+                        min_value=5, 
+                        max_value=500, 
+                        value=20, 
+                        key="b_top_side",
+                        help="Adjust how many ranked entries appear on the chart."
+                    )
+                    start_d, end_d = c_date_sub.slider(
+                        "📅 Date Range Selection:", 
+                        min_value=d_start_val, 
+                        max_value=d_end_val, 
+                        value=(d_start_val, d_end_val), 
+                        format="YYYY-MM-DD", 
+                        key="b_date_side",
+                        help="Restrict the bar chart analysis to plays within this calendar window."
+                    )
+                else:
+                    top_n = chosen_top_n
+                    start_d, end_d = st.slider(
+                        "📅 Date Range Selection:", 
+                        min_value=d_start_val, 
+                        max_value=d_end_val, 
+                        value=(d_start_val, d_end_val), 
+                        format="YYYY-MM-DD", 
+                        key="b_date_side_canned",
+                        help="Restrict the bar chart analysis to plays within this calendar window."
+                    )
+        else:
+            with col_cutoff:
+                if is_custom:
+                    top_n = st.slider(
+                        "Display Limit (Max 500):", 
+                        min_value=5, 
+                        max_value=500, 
+                        value=20, 
+                        key="b_top_solo",
+                        help="Adjust how many ranked entries appear on the chart."
+                    )
+                else:
+                    top_n = chosen_top_n
+                    direction_label = "Bottom" if "Lowest" in ranking_direction else "Top"
+                    st.markdown(f"<div style='margin-top: 26px; font-size: 14px; color: #94A3B8;'><b>Preset Active:</b> Showing {direction_label.lower()} {top_n} {group_col}s</div>", unsafe_allow_html=True)
+
+        available_slice_dims = [c for c in ordered_cat_cols if c != group_col]
+        mask = np.ones(len(df), dtype=bool)
+
+        if available_slice_dims:
+            with st.expander("🔍 Filter / Slice by Specific Attribute (Optional)", expanded=False):
+                col_s1, col_s2 = st.columns([1, 2])
+                slice_dim = col_s1.selectbox("Filter Dimension:", available_slice_dims, index=0, key="b_slice_dim")
+                slice_vals = sorted(df[slice_dim].dropna().unique().astype(str))
+                chosen_slice = col_s2.multiselect(f"Filter specific {slice_dim}s (leave blank for all):", options=slice_vals, default=[], key="b_slice_vals")
+                if chosen_slice:
+                    mask &= df[slice_dim].astype(str).isin(chosen_slice).to_numpy()
+
+        if use_date_in_breakdown and d_start_val and d_start_val != d_end_val:
+            mask &= (df['Date_Only'] >= start_d).to_numpy() & (df['Date_Only'] <= end_d).to_numpy()
+
+        if 'ms_played' in df.columns and min_play_sec > 0:
+            mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
+
+        if exclude_unknowns:
+            mask &= ~df[group_col].astype(str).str.strip().str.lower().isin(
+                ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
+            ).to_numpy()
+
+        active_chart_df = df[mask]
+
+        if calc == "Frequency / Count":
+            grouped = active_chart_df.groupby(group_col, observed=True).size().reset_index(name="Count")
+            lbl = "Count"
+        elif calc == "Sum of Column" and val_c:
+            grouped = active_chart_df.groupby(group_col, observed=True)[val_c].sum().round(2).reset_index(name=f"Sum_{val_c}")
+            lbl = f"Sum_{val_c}"
+        elif calc == "Average of Column" and val_c:
+            grouped = active_chart_df.groupby(group_col, observed=True)[val_c].mean().round(2).reset_index(name=f"Avg_{val_c}")
+            lbl = f"Avg_{val_c}"
+        else: 
+            grouped = pd.DataFrame(); lbl = ""
+
+        if not grouped.empty:
+            is_ascending_sort = ("Lowest" in ranking_direction)
+            summary_top = grouped.sort_values(by=lbl, ascending=is_ascending_sort).head(top_n).copy()
+            summary_top['formatted_label'] = summary_top[lbl].apply(lambda x: f"{int(x):,}" if isinstance(x, (int, float)) and float(x).is_integer() else f"{x:,.2f}")
+
+            rank_title_prefix = "Bottom" if is_ascending_sort else "Top"
+            fig = px.bar(
+                summary_top, x=lbl, y=group_col, orientation='h', color=lbl, 
+                text='formatted_label' if show_bar_labels else None,
+                color_continuous_scale=selected_palette, 
+                title=f"{rank_title_prefix} {len(summary_top)} {group_col} by {lbl}"
             )
-            fig_heat.update_layout(
+            if show_bar_labels:
+                fig.update_traces(textposition='outside', cliponaxis=False)
+
+            ui_height = max(500, min(len(summary_top) * 26, 4000))
+            yaxis_kwargs = dict(
+                categoryorder='total ascending' if not is_ascending_sort else 'total descending', 
+                automargin=True,
+                showgrid=show_gridlines,
+                gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)"
+            )
+            if len(summary_top) <= 250:
+                yaxis_kwargs['dtick'] = 1
+
+            fig.update_layout(
                 paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                yaxis=dict(automargin=True, color=chart_text), xaxis=dict(automargin=True, color=chart_text),
-                margin=dict(l=100, r=40, t=50, b=50), height=520,
+                yaxis=yaxis_kwargs, 
+                xaxis=dict(
+                    automargin=True, 
+                    gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", 
+                    showgrid=show_gridlines, 
+                    color=chart_text,
+                    type="log" if use_log_scale else "linear"
+                ),
+                margin=dict(l=max(200, min(int(summary_top[group_col].astype(str).str.len().max() * 9.5), 450)), r=80, t=50, b=50),
+                height=ui_height,
                 autosize=True
             )
-            st.plotly_chart(fig_heat, use_container_width=True, config={'responsive': True})
-            render_export_bar(fig_heat, pivot.reset_index(), "heatmap_export", total_rows=len(pivot))
+            st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
+            render_export_bar(fig, grouped, f"breakdown_{group_col}_{lbl}", total_rows=len(summary_top))
+            with st.expander("View Data Table"):
+                st.dataframe(summary_top.drop(columns=['formatted_label'], errors='ignore'), hide_index=True, use_container_width=True)
 
-# --- TAB 4: CATALOG & RANKINGS ---
-with t_catalog:
-    st.subheader("Global Leaderboard & Catalog")
-    target_catalog = st.selectbox(
-        "Entity to Inspect:", 
-        ordered_cat_cols, 
-        index=0, 
-        key="cat_picker",
-        help="Select entity type (Artist, Track, Album, Country) to populate the master sorted ranking catalog."
-    )
+    # --- TAB 2: TEMPORAL TRENDS ---
+    with t_temporal:
+        st.subheader("Time Series Trends with Multi-Selection")
+        if not has_datetime:
+            st.info("No timestamp field detected in this dataset.")
+        else:
+            date_filtered_t = apply_date_range_filter(df, "trends")
+            if 'ms_played' in date_filtered_t.columns and min_play_sec > 0:
+                date_filtered_t = date_filtered_t[date_filtered_t['ms_played'] >= (min_play_sec * 1000)]
+        
+            filtered_t_df, t_dim = apply_multiselect_filter(date_filtered_t, "tab_t")
+            days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            c_tr, c_dw = st.columns(2)
+        
+            with c_tr:
+                if 1 < filtered_t_df[t_dim].nunique() <= 10:
+                    monthly = filtered_t_df.groupby(['Month_Year', t_dim], observed=True).size().reset_index(name="Volume")
+                    fig_m = px.line(monthly, x='Month_Year', y='Volume', color=t_dim, markers=True, title=f"Monthly Trend by {t_dim}")
+                else:
+                    monthly = filtered_t_df.groupby('Month_Year', observed=True).size().reset_index(name="Volume")
+                    fig_m = px.line(monthly, x='Month_Year', y='Volume', markers=True, title="Monthly Activity Volume")
+            
+                fig_m.update_layout(
+                    paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                    xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
+                    yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
+                    margin=dict(l=60, r=40, t=50, b=50),
+                    autosize=True
+                )
+                st.plotly_chart(fig_m, use_container_width=True, config={'responsive': True})
+                render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
+
+            with c_dw:
+                if 1 < filtered_t_df[t_dim].nunique() <= 8:
+                    dw_agg = filtered_t_df.groupby(['Day_of_Week', t_dim], observed=True).size().reset_index(name="Volume")
+                    fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', color=t_dim, barmode='group', text='Volume' if show_bar_labels else None, title=f"Day of Week by {t_dim}")
+                else:
+                    dw_agg = filtered_t_df.groupby('Day_of_Week', observed=True).size().reindex(days_order).fillna(0).reset_index(name="Volume")
+                    fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', title="Day of Week Distribution", color='Volume', text='Volume' if show_bar_labels else None, color_continuous_scale=selected_palette)
+            
+                if show_bar_labels:
+                    fig_dw.update_traces(textposition='outside', cliponaxis=False)
+                fig_dw.update_layout(
+                    paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                    xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
+                    yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
+                    margin=dict(l=60, r=40, t=50, b=50),
+                    autosize=True
+                )
+                st.plotly_chart(fig_dw, use_container_width=True, config={'responsive': True})
+                render_export_bar(fig_dw, dw_agg, "dow_activity", total_rows=10)
+
+    # --- TAB 3: HEATMAPS ---
+    with t_heatmap:
+        st.subheader("Temporal Density Heatmap")
+        if not has_datetime:
+            st.info("No timestamp field detected in this dataset.")
+        else:
+            date_filtered_h = apply_date_range_filter(df, "heatmap")
+            if 'ms_played' in date_filtered_h.columns and min_play_sec > 0:
+                date_filtered_h = date_filtered_h[date_filtered_h['ms_played'] >= (min_play_sec * 1000)]
+            
+            axis_col1, axis_col2 = st.columns(2)
+            y_axis_choice = axis_col1.selectbox("Y-Axis:", ["Day of Week", "Date Only", "Month-Year"], index=0, key="h_y")
+            x_axis_choice = axis_col2.selectbox("X-Axis:", ["Hour of Day (0–23)", "Time (HH:MM Exact)", "Date Only"], index=0, key="h_x")
+
+            # Slicer matching the Breakdown tab: below axis options in an expander
+            available_slice_dims_h = [c for c in ordered_cat_cols]
+            mask_h = np.ones(len(date_filtered_h), dtype=bool)
+
+            if available_slice_dims_h:
+                with st.expander("🔍 Filter / Slice by Specific Attribute (Optional)", expanded=False):
+                    col_hs1, col_hs2 = st.columns([1, 2])
+                    slice_dim_h = col_hs1.selectbox("Filter Dimension:", available_slice_dims_h, index=0, key="h_slice_dim")
+                    slice_vals_h = sorted(date_filtered_h[slice_dim_h].dropna().unique().astype(str))
+                    chosen_slice_h = col_hs2.multiselect(
+                        f"Filter specific {slice_dim_h}s (leave blank for all):",
+                        options=slice_vals_h,
+                        default=[],
+                        key="h_slice_vals"
+                    )
+                    if chosen_slice_h:
+                        mask_h &= date_filtered_h[slice_dim_h].astype(str).isin(chosen_slice_h).to_numpy()
+
+            filtered_h_df = date_filtered_h[mask_h]
+
+            col_map = {"Day of Week": "Day_of_Week", "Date Only": "Date_Only", "Month-Year": "Month_Year", "Hour of Day (0–23)": "Hour_Only", "Time (HH:MM Exact)": "Time_Only"}
+            y_field, x_field = col_map[y_axis_choice], col_map[x_axis_choice]
+
+            if y_field == x_field:
+                st.warning("Select distinct dimensions for X and Y axes.")
+            elif filtered_h_df.empty:
+                st.warning("No records match the current filter selection.")
+            else:
+                pivot = filtered_h_df.groupby([y_field, x_field], observed=True).size().unstack(fill_value=0).astype(np.int32)
+                days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                if y_field == "Day_of_Week":
+                    pivot = pivot.reindex([d for d in days_order if d in pivot.index])
+                if x_field == "Day_of_Week":
+                    pivot = pivot.reindex(columns=[d for d in days_order if d in pivot.columns])
+
+                fig_heat = px.imshow(
+                    pivot, labels=dict(x=x_axis_choice, y=y_axis_choice, color="Events"),
+                    aspect="auto", color_continuous_scale=selected_palette, title=f"Activity Heatmap ({y_axis_choice} vs {x_axis_choice})"
+                )
+                fig_heat.update_layout(
+                    paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                    yaxis=dict(automargin=True, color=chart_text), xaxis=dict(automargin=True, color=chart_text),
+                    margin=dict(l=100, r=40, t=50, b=50), height=520,
+                    autosize=True
+                )
+                st.plotly_chart(fig_heat, use_container_width=True, config={'responsive': True})
+                render_export_bar(fig_heat, pivot.reset_index(), "heatmap_export", total_rows=len(pivot))
+
+    # --- TAB 4: CATALOG & RANKINGS ---
+    with t_catalog:
+        st.subheader("Global Leaderboard & Catalog")
+        target_catalog = st.selectbox(
+            "Entity to Inspect:", 
+            ordered_cat_cols, 
+            index=0, 
+            key="cat_picker",
+            help="Select entity type (Artist, Track, Album, Country) to populate the master sorted ranking catalog."
+        )
     
-    catalog_mask = np.ones(len(df), dtype=bool)
-    if 'ms_played' in df.columns and min_play_sec > 0:
-        catalog_mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
+        catalog_mask = np.ones(len(df), dtype=bool)
+        if 'ms_played' in df.columns and min_play_sec > 0:
+            catalog_mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
     
-    if exclude_unknowns:
-        catalog_mask &= ~df[target_catalog].astype(str).str.strip().str.lower().isin(
-            ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
-        ).to_numpy()
+        if exclude_unknowns:
+            catalog_mask &= ~df[target_catalog].astype(str).str.strip().str.lower().isin(
+                ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
+            ).to_numpy()
 
-    catalog_source_df = df[catalog_mask]
+        catalog_source_df = df[catalog_mask]
 
-    agg_dict = {'Count': (target_catalog, 'count')}
-    if 'Hours Played' in catalog_source_df.columns:
-        agg_dict['Total Hours'] = ('Hours Played', 'sum')
+        agg_dict = {'Count': (target_catalog, 'count')}
+        if 'Hours Played' in catalog_source_df.columns:
+            agg_dict['Total Hours'] = ('Hours Played', 'sum')
 
-    catalog_df = catalog_source_df.groupby(target_catalog, observed=True).agg(**agg_dict).reset_index()
-    is_ascending_sort = ("Lowest" in ranking_direction)
+        catalog_df = catalog_source_df.groupby(target_catalog, observed=True).agg(**agg_dict).reset_index()
+        is_ascending_sort = ("Lowest" in ranking_direction)
 
-    if 'Total Hours' in catalog_df.columns:
-        catalog_df['Total Hours'] = catalog_df['Total Hours'].round(2)
-        catalog_df = catalog_df.sort_values(by='Total Hours', ascending=is_ascending_sort)
-    else:
-        catalog_df = catalog_df.sort_values(by='Count', ascending=is_ascending_sort)
+        if 'Total Hours' in catalog_df.columns:
+            catalog_df['Total Hours'] = catalog_df['Total Hours'].round(2)
+            catalog_df = catalog_df.sort_values(by='Total Hours', ascending=is_ascending_sort)
+        else:
+            catalog_df = catalog_df.sort_values(by='Count', ascending=is_ascending_sort)
 
-    c_search, c_page_size = st.columns([3, 1])
-    search_query = c_search.text_input(
-        f"Search {target_catalog}s (Press Enter):",
-        placeholder="Type to filter rows instantly...",
-        key=f"search_{target_catalog}"
-    )
-    page_size = c_page_size.selectbox("Rows per page:", [50, 100, 250], index=0)
+        c_search, c_page_size = st.columns([3, 1])
+        search_query = c_search.text_input(
+            f"Search {target_catalog}s (Press Enter):",
+            placeholder="Type to filter rows instantly...",
+            key=f"search_{target_catalog}"
+        )
+        page_size = c_page_size.selectbox("Rows per page:", [50, 100, 250], index=0)
 
-    filtered_catalog = catalog_df
-    if search_query.strip():
-        safe_query = re.escape(search_query.strip())
-        filtered_catalog = catalog_df[
-            catalog_df[target_catalog].astype(str).str.contains(safe_query, case=False, na=False)
-        ]
+        filtered_catalog = catalog_df
+        if search_query.strip():
+            safe_query = re.escape(search_query.strip())
+            filtered_catalog = catalog_df[
+                catalog_df[target_catalog].astype(str).str.contains(safe_query, case=False, na=False)
+            ]
 
-    total_matches = len(filtered_catalog)
-    total_pages = max(1, (total_matches - 1) // page_size + 1)
+        total_matches = len(filtered_catalog)
+        total_pages = max(1, (total_matches - 1) // page_size + 1)
 
-    c_page_num, c_status = st.columns([1, 3])
-    page_num = c_page_num.number_input("Page:", min_value=1, max_value=total_pages, value=1, step=1)
-    start_idx = (page_num - 1) * page_size
-    end_idx = min(start_idx + page_size, total_matches)
+        c_page_num, c_status = st.columns([1, 3])
+        page_num = c_page_num.number_input("Page:", min_value=1, max_value=total_pages, value=1, step=1)
+        start_idx = (page_num - 1) * page_size
+        end_idx = min(start_idx + page_size, total_matches)
 
-    c_status.markdown(
-        f"<div style='margin-top: 32px; font-size: 13px; color: #94A3B8;'>"
-        f"Showing rows <b>{start_idx + 1 if total_matches > 0 else 0}–{end_idx:,}</b> of <b>{total_matches:,}</b> items"
-        f"</div>",
-        unsafe_allow_html=True
-    )
+        c_status.markdown(
+            f"<div style='margin-top: 32px; font-size: 13px; color: #94A3B8;'>"
+            f"Showing rows <b>{start_idx + 1 if total_matches > 0 else 0}–{end_idx:,}</b> of <b>{total_matches:,}</b> items"
+            f"</div>",
+            unsafe_allow_html=True
+        )
 
-    st.dataframe(filtered_catalog.iloc[start_idx:end_idx], use_container_width=True, hide_index=True)
+        st.dataframe(filtered_catalog.iloc[start_idx:end_idx], use_container_width=True, hide_index=True)
     
-    clean_export_name = target_catalog.lower().replace(' ', '_').replace('(', '').replace(')', '')
-    st.download_button(
-        f"📥 Download Full {target_catalog} Catalog (CSV)",
-        sanitize_csv_data(filtered_catalog), 
-        f"{clean_export_name}_catalog.csv", 
-        "text/csv",
-        key=f"dl_{clean_export_name}",
-        help="Download the filtered catalog table as a sanitized CSV file."
-    )
+        clean_export_name = target_catalog.lower().replace(' ', '_').replace('(', '').replace(')', '')
+        st.download_button(
+            f"📥 Download Full {target_catalog} Catalog (CSV)",
+            sanitize_csv_data(filtered_catalog), 
+            f"{clean_export_name}_catalog.csv", 
+            "text/csv",
+            key=f"dl_{clean_export_name}",
+            help="Download the filtered catalog table as a sanitized CSV file."
+        )
