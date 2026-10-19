@@ -658,28 +658,9 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
 
     selected_frame_streak = calculate_max_streak(ts_frame)
 
-    active_ts = ts_frame if not ts_frame.empty else ts_all
-    if len(active_ts) == 0:
-        return {
-            "all_time_max_streak": all_time_max_streak,
-            "selected_frame_streak": 0,
-            "total_sessions": 0,
-            "avg_tracks_per_session": 0.0
-        }
-
-    epoch_seconds = active_ts.astype('int64').to_numpy() // 10**9
-    time_gaps_min = np.diff(epoch_seconds) / 60.0
-    session_cuts = np.where(time_gaps_min > session_idle_minutes)[0]
-    
-    total_sessions = len(session_cuts) + 1
-    session_lengths = np.diff(np.concatenate(([-1], session_cuts, [len(active_ts) - 1])))
-    avg_tracks_per_session = round(float(np.mean(session_lengths)), 1)
-
     return {
         "all_time_max_streak": all_time_max_streak,
-        "selected_frame_streak": selected_frame_streak,
-        "total_sessions": total_sessions,
-        "avg_tracks_per_session": avg_tracks_per_session
+        "selected_frame_streak": selected_frame_streak
     }
 
 # ---------------------------------------------------------
@@ -909,11 +890,9 @@ with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
             streaks = compute_streaks_and_sessions(df, start_date=d_start_val, end_date=d_end_val)
             if streaks:
                 st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
-                s1, s2, s3, s4 = st.columns(4)
+                s1, s2 = st.columns(2)
                 s1.metric("Longest Streak (All Time)", f"{streaks['all_time_max_streak']} days")
                 s2.metric("Longest Streak (Selected Frame)", f"{streaks['selected_frame_streak']} days")
-                s3.metric("Listening Sessions", f"{streaks['total_sessions']:,}")
-                s4.metric("Avg Tracks / Session", f"{streaks['avg_tracks_per_session']}")
             st.markdown("</section>", unsafe_allow_html=True)
         else:
             st.markdown("<section aria-label='General Dataset Summary Metrics'>", unsafe_allow_html=True)
