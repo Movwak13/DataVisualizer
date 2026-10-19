@@ -689,7 +689,7 @@ def render_full_guide():
     st.markdown("### 💡 What Can I Do Here?")
     st.markdown("Explore your streaming activity, configure multi-select views, or follow instructions to export personal data from your music service.")
     
-    t_overview, t_requests = st.tabs(["📋 Overview", "📥 How to Request Data"])
+    t_overview, t_requests, t_sheets = st.tabs(["📋 Overview", "📥 How to Request Data", "📄 Spreadsheet Guide"])
     
     with t_overview:
         col_left, col_right = st.columns([1, 1], gap="large")
@@ -789,6 +789,42 @@ def render_full_guide():
                 1. Submit a customer privacy request under **"Request My Personal Information"** (GDPR / CCPA / US Privacy rights).
                 2. Pandora support will verify your identity and generate your account listening archive.
                 * **What to Upload:** Upload the delivered `station_history.csv` or `play_history.csv`.
+            ''')
+
+    with t_sheets:
+        st.markdown("#### 📄 How to Format Excel & Google Sheets")
+        st.caption("Ensure your spreadsheets load smoothly and map accurately to charts and summaries.")
+
+        with st.expander("🔗 Google Sheets: Sharing & Link Requirements", expanded=True):
+            st.markdown('''
+            To allow the visualizer to read a public Google Sheet:
+            1. Click **Share** in the top right corner of your Google Sheet.
+            2. Under *General access*, change the dropdown from **Restricted** to **"Anyone with the link"** with **Viewer** access.
+            3. Copy the URL from your browser address bar (e.g. `https://docs.google.com/spreadsheets/d/.../edit#gid=0`).
+            4. **Tab Placement:** The visualizer reads the first tab (`gid=0`) by default. Ensure your primary data table is on the very first tab.
+            ''')
+
+        with st.expander("📐 Recommended Table Structure", expanded=True):
+            st.markdown('''
+            * **Row 1 Must Be Headers:** Put attribute names directly in Row 1 (e.g., `Artist`, `Track`, `Album`, `PlayDate`). Avoid title banners, logo images, or blank rows at the top.
+            * **One Record Per Row:** Each row should represent an individual listening event, playback session, or transaction.
+            * **No Merged Cells or Subtotals:** Avoid merged cells or mid-table "Total" rows, as they disrupt automated column type casting.
+            ''')
+
+        with st.expander("🏷️ Recommended Column Headers for Auto-Mapping", expanded=False):
+            st.markdown('''
+            To have music stats (Hours, Tracks, Artists, Streaks) auto-populate, use any of these recognized header names:
+            
+            | Visualizer Metric | Recognized Header Aliases | Example Value |
+            | :--- | :--- | :--- |
+            | **Track / Song** | `Track`, `Track Name`, `SongTitle`, `Content Name` | *Bohemian Rhapsody* |
+            | **Artist** | `Artist`, `Artist Name`, `ArtistName` | *Queen* |
+            | **Album** | `Album`, `Album Title`, `AlbumTitle`, `Container Description` | *A Night at the Opera* |
+            | **Date & Time** | `timestamp`, `PlayDate`, `Event Start Timestamp`, `datetime`, `endTime` | *2024-03-15 14:30:00* |
+            | **Duration** | `ms_played`, `Play Duration Milliseconds`, `Duration` | *354000* (ms) or numeric seconds |
+            | **Platform / Device** | `Platform`, `Build Version`, `station_name` | *iOS*, *Desktop*, *Web* |
+            
+            *Note: For general non-music datasets, select **Other** under "Dataset Platform" to chart any numeric or categorical column.*
             ''')
 
 # If user selected Guide in sidebar, render guide and stop
