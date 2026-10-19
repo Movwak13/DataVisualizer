@@ -730,9 +730,34 @@ def render_full_guide():
                 paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
                 yaxis=dict(categoryorder="total ascending", automargin=True),
                 xaxis=dict(automargin=True, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-                margin=dict(l=100, r=40, t=40, b=30), height=240
+                margin=dict(l=100, r=40, t=40, b=30), height=230
             )
             st.plotly_chart(fig_sample_b, use_container_width=True, config={'responsive': True})
+
+            days_sample = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            hours_sample = [f"{h:02d}:00" for h in range(0, 24, 2)]
+            np.random.seed(42)
+            mock_matrix = np.random.randint(5, 75, size=(len(days_sample), len(hours_sample)))
+            mock_matrix[4:6, 7:10] += 45
+
+            fig_sample_h = px.imshow(
+                mock_matrix, labels=dict(x="Hour of Day", y="Day of Week", color="Plays"),
+                x=hours_sample, y=days_sample, aspect="auto", color_continuous_scale=selected_palette,
+                title="Sample Preview: Activity Density Heatmap"
+            )
+            fig_sample_h.update_layout(
+                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                yaxis=dict(automargin=True, color=chart_text), xaxis=dict(automargin=True, color=chart_text),
+                margin=dict(l=80, r=40, t=40, b=30), height=240
+            )
+            st.plotly_chart(fig_sample_h, use_container_width=True, config={'responsive': True})
+
+            with st.expander("💡 How to Use the Temporal Density Heatmap", expanded=False):
+                st.markdown('''
+                * **Identify Listening Routines:** Compare `Day of Week` vs. `Hour of Day` to see if you listen mostly during your morning commute, during the workday, or late on weekends.
+                * **Filter Down by Artist or Genre:** Use the slice filter below the axis controls to isolate a single artist (e.g., *Radiohead*) to see what time of day you play them.
+                * **Spot Outliers:** Bright tiles indicate high clusters of plays, while dark tiles reveal silent windows.
+                ''')
 
     with t_requests:
         st.markdown("#### 📥 Where & How to Download Your Data")
@@ -1289,17 +1314,37 @@ with t_heatmap:
         if 'ms_played' in date_filtered_h.columns and min_play_sec > 0:
             date_filtered_h = date_filtered_h[date_filtered_h['ms_played'] >= (min_play_sec * 1000)]
             
-        filtered_h_df, _ = apply_multiselect_filter(date_filtered_h, "tab_h")
-        
         axis_col1, axis_col2 = st.columns(2)
         y_axis_choice = axis_col1.selectbox("Y-Axis:", ["Day of Week", "Date Only", "Month-Year"], index=0, key="h_y")
         x_axis_choice = axis_col2.selectbox("X-Axis:", ["Hour of Day (0–23)", "Time (HH:MM Exact)", "Date Only"], index=0, key="h_x")
+
+        # Slicer matching the Breakdown tab: below axis options in an expander
+        available_slice_dims_h = [c for c in ordered_cat_cols]
+        mask_h = np.ones(len(date_filtered_h), dtype=bool)
+
+        if available_slice_dims_h:
+            with st.expander("🔍 Filter / Slice by Specific Attribute (Optional)", expanded=False):
+                col_hs1, col_hs2 = st.columns([1, 2])
+                slice_dim_h = col_hs1.selectbox("Filter Dimension:", available_slice_dims_h, index=0, key="h_slice_dim")
+                slice_vals_h = sorted(date_filtered_h[slice_dim_h].dropna().unique().astype(str))
+                chosen_slice_h = col_hs2.multiselect(
+                    f"Filter specific {slice_dim_h}s (leave blank for all):",
+                    options=slice_vals_h,
+                    default=[],
+                    key="h_slice_vals"
+                )
+                if chosen_slice_h:
+                    mask_h &= date_filtered_h[slice_dim_h].astype(str).isin(chosen_slice_h).to_numpy()
+
+        filtered_h_df = date_filtered_h[mask_h]
 
         col_map = {"Day of Week": "Day_of_Week", "Date Only": "Date_Only", "Month-Year": "Month_Year", "Hour of Day (0–23)": "Hour_Only", "Time (HH:MM Exact)": "Time_Only"}
         y_field, x_field = col_map[y_axis_choice], col_map[x_axis_choice]
 
         if y_field == x_field:
             st.warning("Select distinct dimensions for X and Y axes.")
+        elif filtered_h_df.empty:
+            st.warning("No records match the current filter selection.")
         else:
             pivot = filtered_h_df.groupby([y_field, x_field], observed=True).size().unstack(fill_value=0).astype(np.int32)
             days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
