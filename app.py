@@ -639,28 +639,26 @@ def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=No
     if ts_all.empty:
         return {}
 
-    def calculate_max_streak(timestamps):
-        if timestamps.empty:
-            return 0
-        uniq_dates = pd.Series(timestamps.dt.date.unique()).sort_values()
-        if len(uniq_dates) <= 1:
-            return len(uniq_dates)
+    uniq_dates = pd.Series(ts_all.dt.date.unique()).sort_values()
+    if len(uniq_dates) <= 1:
+        longest_streak = len(uniq_dates)
+    else:
         diffs = (pd.to_datetime(uniq_dates) - pd.to_datetime(uniq_dates.shift(1))).dt.days
         streak_lens = uniq_dates.groupby((diffs != 1).cumsum()).size()
-        return int(streak_lens.max())
+        longest_streak = int(streak_lens.max())
 
-    all_time_max_streak = calculate_max_streak(ts_all)
-
-    if start_date is not None and end_date is not None:
-        ts_frame = ts_all[(ts_all.dt.date >= start_date) & (ts_all.dt.date <= end_date)]
+    # Daily listening stats across active days
+    total_active_days = len(uniq_dates)
+    if 'Hours Played' in data_df.columns and total_active_days > 0:
+        avg_daily_val = f"{(data_df['Hours Played'].sum() / total_active_days):.2f} hrs/day"
+    elif total_active_days > 0:
+        avg_daily_val = f"{(len(data_df) / total_active_days):.1f} tracks/day"
     else:
-        ts_frame = ts_all
-
-    selected_frame_streak = calculate_max_streak(ts_frame)
+        avg_daily_val = "0.0 hrs/day"
 
     return {
-        "all_time_max_streak": all_time_max_streak,
-        "selected_frame_streak": selected_frame_streak
+        "longest_streak": longest_streak,
+        "daily_avg": avg_daily_val
     }
 
 # ---------------------------------------------------------
@@ -891,8 +889,8 @@ with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
             if streaks:
                 st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
                 s1, s2 = st.columns(2)
-                s1.metric("Longest Streak (All Time)", f"{streaks['all_time_max_streak']} days")
-                s2.metric("Longest Streak (Selected Frame)", f"{streaks['selected_frame_streak']} days")
+                s1.metric("Longest Streak", f"{streaks['longest_streak']} days")
+                s2.metric("Daily Listening Average", streaks['daily_avg'])
             st.markdown("</section>", unsafe_allow_html=True)
         else:
             st.markdown("<section aria-label='General Dataset Summary Metrics'>", unsafe_allow_html=True)
