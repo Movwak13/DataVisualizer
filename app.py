@@ -1,5 +1,5 @@
 from genre_service import enrich_artists_with_spotify
-﻿import io, json, logging, os, re, sys, traceback, gc
+import io, json, logging, os, re, sys, traceback, gc
 from datetime import datetime, date
 from urllib.parse import urlparse
 from logging.handlers import RotatingFileHandler
