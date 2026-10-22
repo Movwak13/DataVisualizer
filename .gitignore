@@ -4,3 +4,7 @@ __pycache__/
 ErrorLogs/
 .streamlit/
 *.pyc
+
+.streamlit/secrets.toml
+
+artist_genre_cache.sqlite

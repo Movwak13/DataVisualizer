@@ -1,3 +1,4 @@
+from genre_service import enrich_artists_with_spotify
 ﻿import io, json, logging, os, re, sys, traceback, gc
 from datetime import datetime, date
 from urllib.parse import urlparse
@@ -646,6 +647,13 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
             if 'Hours Played' not in df.columns:
                 df['Hours Played'] = (df['ms_played'] / 3600000.0).round(3)
 
+        if 'Artist' in df.columns:
+            try:
+                genre_map = enrich_artists_with_spotify(df['Artist'], top_limit=250)
+                df['Genre'] = df['Artist'].map(genre_map).fillna('Other / Uncategorized')
+            except Exception:
+                df['Genre'] = 'Other / Uncategorized'
+
     for col in df.columns:
         if any(tok in str(col).lower() for tok in ['timestamp', 'date', 'time', 'created_at', 'endtime']):
             try:
@@ -1028,7 +1036,7 @@ cat_cols = [
 ]
 
 display_cat_cols = [c for c in cat_cols if c not in ['Track', 'Album']]
-priority_order = ['Artist', 'Track (Artist)', 'Album (Artist)']
+priority_order = ['Artist', 'Track (Artist)', 'Album (Artist)', 'Genre']
 ordered_cat_cols = [c for c in priority_order if c in display_cat_cols] + [c for c in display_cat_cols if c not in priority_order]
 
 def render_export_bar(fig, table_df, base_name, total_rows=20):
