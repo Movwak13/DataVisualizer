@@ -428,6 +428,8 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             for k in list(st.session_state.keys()):
                 if k not in ["uploader_key", "legal_acknowledgment", "nav_mode"]:
                     st.session_state.pop(k, None)
+            st.session_state.pop("cached_df", None)
+            st.session_state.pop("last_upload_signature", None)
             gc.collect()
             st.rerun()
 
@@ -892,7 +894,20 @@ if not has_input_data:
     st.caption("🔒 **Online Privacy Protected:** Uploaded records exist solely in temporary container RAM during your active session. No user files are written to permanent server storage.")
     st.stop()
 
-df = parse_and_standardize_session(uploaded, gsheet, is_music=is_music_profile)
+# Compute a signature for uploaded input to prevent reparsing on every rerun
+upload_signature = (
+    tuple((f.name, getattr(f, 'size', 0)) for f in uploaded) if uploaded else (),
+    gsheet.strip() if gsheet else "",
+    is_music_profile
+)
+
+if "cached_df" not in st.session_state or st.session_state.get("last_upload_signature") != upload_signature:
+    with st.spinner("⚡ Ingesting and processing data..."):
+        st.session_state.cached_df = parse_and_standardize_session(uploaded, gsheet, is_music=is_music_profile)
+        st.session_state.last_upload_signature = upload_signature
+
+df = st.session_state.cached_df
+
 if df.empty:
     st.warning("No records ingested. Check format and contents.")
     st.stop()
@@ -1393,7 +1408,7 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
                 fig_heat = px.imshow(
                     pivot, labels=dict(x=x_axis_choice, y=y_axis_choice, color="Events"),
                     aspect="auto", color_continuous_scale=selected_palette, title=f"Activity Heatmap ({y_axis_choice} vs {x_axis_choice})",
-                    text_auto=True if len(pivot) <= 31 and len(pivot.columns) <= 24 else False
+                    text_auto=True if len(pivot) <= 12 and len(pivot.columns) <= 12 else False
                 )
                 fig_heat.update_layout(
                     paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
