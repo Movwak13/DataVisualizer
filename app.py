@@ -1093,16 +1093,17 @@ def apply_date_range_filter(data_frame, key_prefix):
 # 2. COLLAPSIBLE INTERACTIVE VISUALIZATIONS SECTION
 # ---------------------------------------------------------
 with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
-    t_breakdown, t_temporal, t_heatmap, t_catalog = st.tabs([
-        "📊 Multi-Select Breakdowns",
-        "📈 Multi-Select Time Trends",
-        "🔥 Multi-Select Heatmaps",
+    t_breakdown, t_comparison, t_temporal, t_heatmap, t_catalog = st.tabs([
+        "📊 Breakdowns",
+        "📅 Date Comparisons",
+        "📈 Time Trends",
+        "🔥 Heatmaps",
         "📋 Catalog & Rankings"
     ])
 
     # --- TAB 1: BREAKDOWNS ---
     with t_breakdown:
-        st.subheader("Category Breakdown with Multi-Selection")
+        st.subheader("Category Breakdown")
 
         c_group, c_calc, c_num, c_duration = st.columns([1.2, 1.2, 1.2, 1.4])
         group_col = c_group.selectbox(
@@ -1292,9 +1293,142 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
             with st.expander("View Data Table"):
                 st.dataframe(summary_top.drop(columns=['formatted_label'], errors='ignore'), hide_index=True, use_container_width=True)
 
-    # --- TAB 2: TEMPORAL TRENDS ---
+    # --- TAB 2: DATE COMPARISONS ---
+    with t_comparison:
+        st.subheader("Period-over-Period Date Comparisons")
+        if not has_datetime:
+            st.info("No timestamp field detected in this dataset to perform date comparisons.")
+        else:
+            dt_col_cmp = next((c for c in df.columns if c.endswith("_dt")), None)
+            valid_dates_df = df.dropna(subset=[dt_col_cmp]).copy() if dt_col_cmp else pd.DataFrame()
+            
+            if valid_dates_df.empty:
+                st.warning("No valid timestamps available.")
+            else:
+                # Extract available years and month-years
+                valid_dates_df["_Year_Int"] = valid_dates_df[dt_col_cmp].dt.year
+                valid_dates_df["_Month_Year_Str"] = valid_dates_df[dt_col_cmp].dt.strftime("%Y-%m")
+                
+                avail_years = sorted(valid_dates_df["_Year_Int"].unique(), reverse=True)
+                avail_months = sorted(valid_dates_df["_Month_Year_Str"].unique(), reverse=True)
+                
+                c_mode, c_dim, c_metric = st.columns([1.2, 1.4, 1.4])
+                compare_mode = c_mode.radio(
+                    "Comparison Granularity:",
+                    ["Year-over-Year (Full Years)", "Month & Year (Specific Months)"],
+                    key="cmp_granularity"
+                )
+                
+                cmp_dim = c_dim.selectbox(
+                    "Dimension to Compare:",
+                    ordered_cat_cols,
+                    index=0,
+                    key="cmp_dim"
+                )
+                
+                metric_options = ["Play / Event Count"]
+                if "Hours Played" in df.columns:
+                    metric_options.append("Total Hours Played")
+                elif num_cols:
+                    metric_options.extend([f"Sum of {c}" for c in num_cols[:3]])
+                
+                cmp_metric = c_metric.selectbox("Metric to Compare:", metric_options, key="cmp_metric")
+                
+                # Period Selector (Up to 5)
+                if compare_mode == "Year-over-Year (Full Years)":
+                    default_periods = [str(y) for y in avail_years[:min(3, len(avail_years))]]
+                    chosen_periods = st.multiselect(
+                        "Select Years to Compare (Choose 2 to 5):",
+                        options=[str(y) for y in avail_years],
+                        default=default_periods,
+                        max_selections=5,
+                        key="cmp_chosen_years"
+                    )
+                    period_col = "_Year_Int"
+                    filter_vals = [int(p) for p in chosen_periods] if chosen_periods else []
+                else:
+                    default_periods = avail_months[:min(3, len(avail_months))]
+                    chosen_periods = st.multiselect(
+                        "Select Months to Compare (Choose 2 to 5):",
+                        options=avail_months,
+                        default=default_periods,
+                        max_selections=5,
+                        key="cmp_chosen_months"
+                    )
+                    period_col = "_Month_Year_Str"
+                    filter_vals = chosen_periods
+
+                if len(chosen_periods) < 2:
+                    st.info("💡 Please select at least 2 periods above to display comparative analytics.")
+                else:
+                    # Filter matching rows
+                    cmp_df = valid_dates_df[valid_dates_df[period_col].isin(filter_vals)].copy()
+                    if exclude_unknowns:
+                        cmp_df = cmp_df[~cmp_df[cmp_dim].astype(str).str.strip().str.lower().isin(
+                            ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
+                        )]
+                    
+                    if 'ms_played' in cmp_df.columns and min_play_sec > 0:
+                        cmp_df = cmp_df[cmp_df['ms_played'] >= (min_play_sec * 1000)]
+                        
+                    # Calculate values
+                    cmp_df["_Period_Label"] = cmp_df[period_col].astype(str)
+                    
+                    if cmp_metric == "Play / Event Count":
+                        agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True).size().reset_index(name="Value")
+                    elif cmp_metric == "Total Hours Played":
+                        agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True)["Hours Played"].sum().round(2).reset_index(name="Value")
+                    else:
+                        num_f = cmp_metric.replace("Sum of ", "")
+                        agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True)[num_f].sum().round(2).reset_index(name="Value")
+                    
+                    # Top items overall across these periods
+                    top_overall = (
+                        agg_res.groupby(cmp_dim, observed=True)["Value"].sum()
+                        .sort_values(ascending=False)
+                        .head(15)
+                        .index.tolist()
+                    )
+                    
+                    plot_cmp = agg_res[agg_res[cmp_dim].isin(top_overall)].copy()
+                    plot_cmp[cmp_dim] = pd.Categorical(plot_cmp[cmp_dim], categories=top_overall[::-1], ordered=True)
+                    plot_cmp = plot_cmp.sort_values([cmp_dim, "_Period_Label"])
+                    
+                    # Grouped Bar Chart
+                    fig_cmp = px.bar(
+                        plot_cmp,
+                        x="Value",
+                        y=cmp_dim,
+                        color="_Period_Label",
+                        barmode="group",
+                        orientation="h",
+                        title=f"Top 15 {cmp_dim}s: Period Comparison ({cmp_metric})",
+                        labels={"_Period_Label": "Period", "Value": cmp_metric},
+                        color_discrete_sequence=px.colors.qualitative.Plotly
+                    )
+                    fig_cmp.update_layout(
+                        paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                        yaxis=dict(automargin=True, showgrid=show_gridlines, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)"),
+                        xaxis=dict(automargin=True, showgrid=show_gridlines, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", color=chart_text),
+                        margin=dict(l=150, r=40, t=50, b=50),
+                        height=max(500, len(top_overall) * 36),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    st.plotly_chart(fig_cmp, use_container_width=True, config={"responsive": True})
+                    
+                    # Comparative Matrix Table
+                    pivot_cmp = agg_res.pivot_table(index=cmp_dim, columns="_Period_Label", values="Value", fill_value=0)
+                    pivot_cmp["Total"] = pivot_cmp.sum(axis=1)
+                    pivot_cmp = pivot_cmp.sort_values(by="Total", ascending=False).drop(columns=["Total"])
+                    
+                    with st.expander("📋 View Side-by-Side Comparison Table", expanded=False):
+                        st.dataframe(pivot_cmp.head(100), use_container_width=True)
+                    
+                    render_export_bar(fig_cmp, pivot_cmp.reset_index(), "date_comparison_export", total_rows=len(top_overall))
+
+        # --- TAB 3: TEMPORAL TRENDS ---
     with t_temporal:
-        st.subheader("Time Series Trends with Multi-Selection")
+        st.subheader("Time Series Trends")
         if not has_datetime:
             st.info("No timestamp field detected in this dataset.")
         else:
@@ -1356,7 +1490,7 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
                 st.plotly_chart(fig_dw, use_container_width=True, config={'responsive': True})
                 render_export_bar(fig_dw, dw_agg, "dow_activity", total_rows=10)
 
-    # --- TAB 3: HEATMAPS ---
+    # --- TAB 4: HEATMAPS ---
     with t_heatmap:
         st.subheader("Temporal Density Heatmap")
         if not has_datetime:
@@ -1419,7 +1553,7 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
                 st.plotly_chart(fig_heat, use_container_width=True, config={'responsive': True})
                 render_export_bar(fig_heat, pivot.reset_index(), "heatmap_export", total_rows=len(pivot))
 
-    # --- TAB 4: CATALOG & RANKINGS ---
+    # --- TAB 5: CATALOG & RANKINGS ---
     with t_catalog:
         st.subheader("Global Leaderboard & Catalog")
         target_catalog = st.selectbox(
