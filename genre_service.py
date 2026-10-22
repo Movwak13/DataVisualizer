@@ -1,8 +1,7 @@
-﻿import os, sqlite3, time, base64, requests, logging
+import os, sqlite3, time, base64, requests, logging
 import streamlit as st
 
 logger = logging.getLogger("DataVisualizerLogger")
-
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "artist_genre_cache.sqlite")
 
 def init_genre_cache():
@@ -35,7 +34,8 @@ def get_cached_genres(artist_names):
         placeholders = ','.join(['?'] * len(artist_names))
         c.execute(f"SELECT artist_name, primary_genre FROM artist_genres WHERE artist_name IN ({placeholders})", list(artist_names))
         for row in c.fetchall():
-            results[row[0]] = row[1]
+            if row[1] not in ("Indie / Unclassified", "Other / Uncategorized", "Other"):
+                results[row[0]] = row[1]
         conn.close()
     except Exception as e:
         logger.error(f"Cache lookup error: {e}")
@@ -85,28 +85,50 @@ def get_spotify_token():
     return None
 
 GENRE_BUCKETS = {
-    "Rock": ["rock", "grunge", "indie rock", "alternative rock", "classic rock", "hard rock", "psychedelic rock"],
-    "Indie / Alt": ["indie", "shoegaze", "dream pop", "post-punk", "art pop", "indie pop", "lo-fi"],
-    "Metal": ["metal", "metalcore", "death metal", "black metal", "heavy metal", "sludge"],
-    "Punk / Emo": ["punk", "pop punk", "hardcore", "emo", "screamo", "skate punk"],
-    "Electronic / Dance": ["electronic", "edm", "house", "techno", "synthwave", "ambient", "trance", "idm", "drum and bass", "dubstep"],
-    "Hip-Hop / Rap": ["rap", "hip hop", "trap", "boom bap", "drill", "underground rap"],
-    "R&B / Soul": ["r&b", "soul", "neo soul", "funk", "motown", "contemporary r&b"],
-    "Pop": ["pop", "dance pop", "electropop", "synthpop", "k-pop", "hyperpop"],
-    "Folk / Acoustic": ["folk", "singer-songwriter", "acoustic", "bluegrass", "americana"],
-    "Country": ["country", "alt-country", "outlaw country", "nashville sound"],
-    "Jazz / Blues": ["jazz", "blues", "bossa nova", "fusion", "bebop"],
-    "Classical / Score": ["classical", "soundtrack", "score", "orchestral", "baroque"]
+    "Metal": ["metal", "death metal", "black metal", "thrash", "metalcore", "sludge", "doom metal", "deathcore", "djent", "power metal"],
+    "Punk / Hardcore": ["punk", "hardcore", "post-hardcore", "pop punk", "emo", "screamo", "skate punk", "crust", "grindcore"],
+    "Rock": ["rock", "grunge", "alternative rock", "classic rock", "hard rock", "psychedelic", "garage rock", "stoner rock", "blues rock"],
+    "Indie / Alt": ["indie", "shoegaze", "dream pop", "post-punk", "art pop", "indie pop", "lo-fi", "slowcore", "noise pop", "new wave", "britpop"],
+    "Electronic / Dance": ["electronic", "edm", "house", "techno", "synthwave", "ambient", "trance", "idm", "drum and bass", "dubstep", "electro", "garage", "downtempo"],
+    "Hip-Hop / Rap": ["rap", "hip hop", "trap", "boom bap", "drill", "underground rap", "cloud rap", "conscious hip hop"],
+    "R&B / Soul": ["r&b", "soul", "neo soul", "funk", "motown", "contemporary r&b", "disco"],
+    "Pop": ["pop", "dance pop", "electropop", "synthpop", "k-pop", "j-pop", "hyperpop", "teen pop"],
+    "Folk / Acoustic": ["folk", "singer-songwriter", "acoustic", "bluegrass", "americana", "traditional folk"],
+    "Country": ["country", "alt-country", "outlaw country", "americana", "bluegrass", "nashville"],
+    "Jazz / Blues": ["jazz", "blues", "bossa nova", "fusion", "bebop", "cool jazz", "soul jazz"],
+    "Classical / Score": ["classical", "soundtrack", "score", "orchestral", "baroque", "romantic era", "chamber music"]
 }
 
 def map_tags_to_bucket(raw_tags):
     if not raw_tags:
-        return "Indie / Unclassified"
-    tags_lower = [t.lower() for t in raw_tags]
+        return None
+    tags_lower = [str(t).lower() for t in raw_tags]
     for bucket, keywords in GENRE_BUCKETS.items():
         if any(kw in tag for tag in tags_lower for kw in keywords):
             return bucket
-    return raw_tags[0].title() if raw_tags else "Other"
+    for tag in tags_lower:
+        if len(tag) > 2 and not any(ch in tag for ch in ["music", "seen live", "favorite"]):
+            return tag.title()
+    return None
+
+def fetch_musicbrainz_genre(artist_name):
+    try:
+        url = "https://musicbrainz.org/ws/2/artist"
+        params = {"query": f'artist:"{artist_name}"', "fmt": "json", "limit": 1}
+        headers = {"User-Agent": "PersonalDataVisualizer/2.0 ( contact@movwak.dev )"}
+        res = requests.get(url, params=params, headers=headers, timeout=3)
+        if res.status_code == 200:
+            data = res.json()
+            artists = data.get("artists", [])
+            if artists:
+                tags = [t.get("name") for t in artists[0].get("tags", [])]
+                genres = [g.get("name") for g in artists[0].get("genres", [])]
+                all_tags = genres + tags
+                if all_tags:
+                    return map_tags_to_bucket(all_tags)
+    except Exception:
+        pass
+    return None
 
 def enrich_artists_with_spotify(artist_series, top_limit=250):
     init_genre_cache()
@@ -118,29 +140,46 @@ def enrich_artists_with_spotify(artist_series, top_limit=250):
 
     if missing:
         token = get_spotify_token()
-        if token:
-            headers = {"Authorization": f"Bearer {token}"}
-            newly_resolved = {}
-            for a_name in missing[:75]:
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        newly_resolved = {}
+        
+        # Batch resolve up to 60 missing artists per run
+        for a_name in missing[:60]:
+            clean_name = str(a_name).strip()
+            genre_found = None
+            
+            # 1. Try Spotify Direct Artist Search & Profile
+            if token:
                 try:
                     s_res = requests.get(
                         "https://api.spotify.com/v1/search",
-                        params={"q": a_name, "type": "artist", "limit": 1},
+                        params={"q": f'artist:"{clean_name}"', "type": "artist", "limit": 1},
                         headers=headers,
-                        timeout=5
+                        timeout=4
                     )
                     if s_res.status_code == 200:
                         items = s_res.json().get("artists", {}).get("items", [])
-                        if items and items[0].get("genres"):
-                            bucket = map_tags_to_bucket(items[0]["genres"])
-                            newly_resolved[a_name] = bucket
-                        else:
-                            newly_resolved[a_name] = "Indie / Unclassified"
-                    elif s_res.status_code == 429:
-                        break
+                        if items:
+                            art_id = items[0].get("id")
+                            raw_genres = items[0].get("genres", [])
+                            
+                            # If search genres empty, query direct artist endpoint
+                            if not raw_genres and art_id:
+                                a_res = requests.get(f"https://api.spotify.com/v1/artists/{art_id}", headers=headers, timeout=4)
+                                if a_res.status_code == 200:
+                                    raw_genres = a_res.json().get("genres", [])
+                                    
+                            genre_found = map_tags_to_bucket(raw_genres)
                 except Exception:
                     pass
-            save_cached_genres(newly_resolved)
-            resolved.update(newly_resolved)
+
+            # 2. Fallback to MusicBrainz if Spotify returns no genre tags
+            if not genre_found:
+                genre_found = fetch_musicbrainz_genre(clean_name)
+
+            newly_resolved[clean_name] = genre_found if genre_found else "Other / Indie"
+
+        save_cached_genres(newly_resolved)
+        resolved.update(newly_resolved)
 
     return resolved
