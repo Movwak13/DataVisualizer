@@ -1,0 +1,16 @@
+﻿name: Keep Streamlit App Awake
+
+on:
+  schedule:
+    # Runs every 3 hours (at minute 0 of every 3rd hour UTC)
+    - cron: '0 */3 * * *'
+  workflow_dispatch: # Allows manual triggering from GitHub Actions tab
+
+jobs:
+  ping-app:
+    name: Ping Streamlit Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send HTTP request to keep container active
+        run: |
+          curl -I -s -L "https://movwakdatavisualizer.streamlit.app/" || exit 0
