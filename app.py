@@ -334,37 +334,12 @@ st.sidebar.markdown("<div style='margin-bottom: 14px;'></div>", unsafe_allow_htm
 # SIDEBAR CONTROLS
 # ---------------------------------------------------------
 with st.sidebar.expander("📁 Dashboard Controls", expanded=False):
-    enable_date_filtering = st.toggle(
-        "Enable Date Range Filter", 
-        value=True, 
-        help="Turn on double-ended chronological sliders to constrain charts to specific date ranges."
-    )
-    show_bar_labels = st.toggle(
-        "Show Bar Value Labels", 
-        value=True, 
-        help="Display exact counts or numeric totals at the outer tip of each bar for easy reading."
-    )
-    exclude_unknowns = st.toggle(
-        "Exclude Unknown / Null Metadata",
-        value=True,
-        help="Hide 'Unknown Artist', 'Unknown Track', and empty records so real data occupies the top rankings."
-    )
-    ranking_direction = st.radio(
-        "Ranking Direction:",
-        options=["Highest First (Top N)", "Lowest First (Tail N)"],
-        index=0,
-        help="Switch between viewing your top performers and discovering forgotten tracks or hidden gems."
-    )
-    use_log_scale = st.toggle(
-        "Logarithmic Value Scale",
-        value=False,
-        help="Compress extreme high-volume outliers so you can clearly compare medium and lower-volume items."
-    )
-    show_gridlines = st.toggle(
-        "Show Canvas Gridlines",
-        value=True,
-        help="Display background calibration grid lines on charts and exported PNG graphics."
-    )
+    enable_date_filtering = st.toggle("Enable Date Range Filter", value=True, help="Constrain charts to specific dates.")
+    show_bar_labels = st.toggle("Show Bar Value Labels", value=True, help="Display exact totals at the tip of each bar.")
+    min_play_sec = st.slider("Min Play Duration (Seconds):", min_value=0, max_value=60, value=30, step=5, help="Filter out quick skips under this threshold.")
+    exclude_unknowns = st.toggle("Exclude Unknown Metadata", value=True, help="Hide blank, unknown, or missing records.")
+    show_gridlines = st.toggle("Show Chart Gridlines", value=True, help="Display background grid lines on charts.")
+    ranking_direction = 'Highest First (Top N)'
 
 with st.sidebar.expander("🎨 Stylings & Colors", expanded=False):
     available_palettes = STYLING_CFG.get("palettes", ["Viridis", "Plasma", "Turbo"])
@@ -933,180 +908,39 @@ else:
 # ---------------------------------------------------------
 # 1. COLLAPSIBLE SUMMARY METRICS SECTION
 # ---------------------------------------------------------
-with st.expander("📌 Summary Metrics & Data Profile", expanded=True):
-    top_tab_qa, top_tab_info, top_tab_raw = st.tabs(["⚡ Quick Analysis", "ℹ️ Data Info", "📄 Raw Data"])
-    with top_tab_qa:
-        if is_music_profile:
-            st.markdown("<section aria-label='Music Summary Metrics'>", unsafe_allow_html=True)
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Unique Artists", f"{df['Artist'].nunique():,}" if 'Artist' in df.columns else "N/A")
-            c2.metric("Unique Tracks", f"{df['Track (Artist)'].nunique():,}" if 'Track (Artist)' in df.columns else "N/A")
-            c3.metric("Total Albums", f"{df['Album (Artist)'].nunique():,}" if 'Album (Artist)' in df.columns else "N/A")
-
-            total_hours = df['Hours Played'].sum() if 'Hours Played' in df.columns else 0.0
-            total_skipped = int(df['skipped'].fillna(False).sum()) if 'skipped' in df.columns else (
-                int(df['reason_end'].astype(str).str.lower().isin(['fwdbtn', 'manual_skip', 'skip']).sum()) if 'reason_end' in df.columns else 0
-            )
-            full_plays = int(df['reason_end'].astype(str).str.lower().isin(['trackdone', 'natural_end', 'end']).sum()) if 'reason_end' in df.columns else 0
-
-            p1, p2, p3 = st.columns(3)
-            p1.metric("Total Hours Played", f"{total_hours:,.2f} hrs")
-            p2.metric("Total Songs Skipped", f"{total_skipped:,}")
-            p3.metric("Full Plays", f"{full_plays:,}")
-            
-            streaks = compute_streaks_and_sessions(df, start_date=d_start_val, end_date=d_end_val)
-            if streaks:
-                st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
-                s1, s2, _ = st.columns(3)
-                s1.metric("Longest Streak", f"{streaks['longest_streak']} days")
-                s2.metric("Daily Listening Average", streaks['daily_avg'])
-            st.markdown("</section>", unsafe_allow_html=True)
-        else:
-            st.markdown("<section aria-label='General Dataset Summary Metrics'>", unsafe_allow_html=True)
-            num_cols_qa = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32']).columns.tolist()
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Total Records Ingested", f"{len(df):,}")
-            c2.metric("Total Attributes", len(df.columns))
-            c3.metric("Numeric Metrics Detected", len(num_cols_qa))
-
-            if num_cols_qa:
-                lead_col = num_cols_qa[0]
-                p1, p2, p3 = st.columns(3)
-                p1.metric(f"Total Sum ({lead_col})", f"{df[lead_col].sum():,.2f}")
-                p2.metric(f"Average ({lead_col})", f"{df[lead_col].mean():,.2f}")
-                p3.metric(f"Max ({lead_col})", f"{df[lead_col].max():,.2f}")
-            st.markdown("</section>", unsafe_allow_html=True)
-
-    with top_tab_info:
-        st.markdown("<section aria-label='Data Info Metrics'>", unsafe_allow_html=True)
-        i1, i2, i3 = st.columns(3)
-        i1.metric("Total Records", f"{len(df):,}")
-        i2.metric("Dimension Fields", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
-        i3.metric("Date Tracking", "Active" if 'Date_Only' in df.columns else "Disabled")
-        st.markdown("</section>", unsafe_allow_html=True)
-
-    with top_tab_raw:
-        st.markdown("#### 📄 Uploaded Ingested Data")
-        st.caption(f"Displaying {len(df):,} cleaned rows with sensitive columns (IPs, URIs, Account IDs) redacted.")
-        
-        c_search_raw, c_cols_raw = st.columns([1, 2])
-        raw_search = c_search_raw.text_input("🔍 Quick Filter Rows:", placeholder="Type to filter across text...", key="raw_filter_str")
-        selected_raw_cols = c_cols_raw.multiselect("Visible Columns:", options=list(df.columns), default=list(df.columns)[:10] if len(df.columns) > 10 else list(df.columns), key="raw_cols_ms")
-        
-        display_raw_df = df
-        if raw_search.strip():
-            search_str = re.escape(raw_search.strip())
-            str_cols = df.select_dtypes(include=['object', 'string', 'category']).columns
-            if len(str_cols) > 0:
-                combined_series = df[str_cols[0]].astype(str)
-                for c in str_cols[1:6]:
-                    combined_series = combined_series + " " + df[c].astype(str)
-                raw_mask = combined_series.str.contains(search_str, case=False, na=False)
-                display_raw_df = df[raw_mask]
-            
-        if selected_raw_cols:
-            display_raw_df = display_raw_df[selected_raw_cols]
-            
-        st.dataframe(display_raw_df.head(1000), use_container_width=True, hide_index=True)
-        if len(display_raw_df) > 1000:
-            st.caption(f"Showing first 1,000 of {len(display_raw_df):,} matching rows for preview performance.")
-            
-        st.download_button(
-            "📥 Download Ingested Dataset (CSV)",
-            sanitize_csv_data(display_raw_df),
-            "ingested_data_clean.csv",
-            "text/csv",
-            key="dl_raw_table"
-        )
-
-st.divider()
-
-# ---------------------------------------------------------
-# COLUMN METADATA EXTRACTION
-# ---------------------------------------------------------
-has_datetime = 'Date_Only' in df.columns
-dt_derived = {'Date_Only', 'Time_Only', 'Hour_Only', 'Day_of_Week', 'Month_Year'}
-all_dt_cols = {c for c in df.columns if c.endswith('_dt') or c in dt_derived or c in ['timestamp', 'ts', 'endTime']}
-num_cols = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32']).columns.tolist()
-
-cat_cols = [
-    c for c in df.columns 
-    if c not in all_dt_cols and c not in IGNORED_COLS and c not in ['ms_played', 'Hours Played']
-    and (df[c].dtype.name in ['object', 'category', 'string', 'bool'])
-]
-
-display_cat_cols = [c for c in cat_cols if c not in ['Track', 'Album']]
-priority_order = ['Artist', 'Track (Artist)', 'Album (Artist)', 'Genre']
-ordered_cat_cols = [c for c in priority_order if c in display_cat_cols] + [c for c in display_cat_cols if c not in priority_order]
-
-def render_export_bar(fig, table_df, base_name, total_rows=20):
-    c1, c2, _ = st.columns([1, 1, 3])
-    with c1:
-        st.download_button(
-            "📥 Download CSV", 
-            sanitize_csv_data(table_df), 
-            f"{base_name}.csv", 
-            "text/csv", 
-            key=f"csv_{base_name}",
-            help="Download the aggregated data table in sanitized CSV format."
-        )
-    with c2:
-        try:
-            export_fig = go.Figure(fig)
-            export_fig.update_layout(
-                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg,
-                font=dict(color=chart_text),
-                xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-                yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text)
-            )
-            row_h = LIMITS_CFG.get("row_pixel_height", 26)
-            calculated_height = max(800, min(2400, int(total_rows * row_h) + 120))
-            max_w = LIMITS_CFG.get("max_export_width", 1600)
-            img_bytes = export_fig.to_image(format="png", width=max_w, height=calculated_height, scale=2)
-            st.download_button(
-                "🖼️ Download PNG", 
-                img_bytes, f"{base_name}.png", 
-                "image/png", key=f"png_{base_name}",
-                help="Export a high-resolution standalone PNG graphic for reports or presentations."
-            )
-        except Exception as e:
-            log_error("Image Export", e, "Export engine unavailable (requires python kaleido package).")
-
-def apply_date_range_filter(data_frame, key_prefix):
-    if not has_datetime or not enable_date_filtering:
-        return data_frame
+# --- SUMMARY KPI BANNER ---
+st.markdown("<section aria-label='Summary KPI Banner'>", unsafe_allow_html=True)
+if is_music_profile:
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1.metric("Unique Artists", f"{df['Artist'].nunique():,}" if 'Artist' in df.columns else "N/A")
+    k2.metric("Unique Tracks", f"{df['Track (Artist)'].nunique():,}" if 'Track (Artist)' in df.columns else "N/A")
+    k3.metric("Total Albums", f"{df['Album (Artist)'].nunique():,}" if 'Album (Artist)' in df.columns else "N/A")
     
-    dt_col_local = next((c for c in data_frame.columns if c.endswith('_dt')), None)
-    if not dt_col_local:
-        return data_frame
+    tot_hours = df['Hours Played'].sum() if 'Hours Played' in df.columns else 0.0
+    k4.metric("Hours Played", f"{tot_hours:,.1f} hrs")
+    
+    full_cnt = int(df['reason_end'].astype(str).str.lower().isin(['trackdone', 'natural_end', 'end']).sum()) if 'reason_end' in df.columns else 0
+    skip_cnt = int(df['reason_end'].astype(str).str.lower().isin(['fwdbtn', 'manual_skip', 'skip']).sum()) if 'reason_end' in df.columns else 0
+    k5.metric("Full Plays", f"{full_cnt:,}")
+    
+    tot_plays = len(df)
+    skip_rate = (skip_cnt / tot_plays * 100) if tot_plays > 0 else 0.0
+    k6.metric("Skip Rate", f"{skip_rate:.1f}%")
+else:
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Total Records", f"{len(df):,}")
+    k2.metric("Dimensions", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
+    num_cols_s = df.select_dtypes(include=['number']).columns.tolist()
+    k3.metric("Numeric Measures", len(num_cols_s))
+st.markdown("</section>", unsafe_allow_html=True)
+st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
 
-    min_date_val = data_frame[dt_col_local].min().date()
-    max_date_val = data_frame[dt_col_local].max().date()
-    if min_date_val == max_date_val:
-        return data_frame
-
-    selected_range = st.slider(
-        "📅 Date Range Filter:", 
-        min_value=min_date_val, 
-        max_value=max_date_val, 
-        value=(min_date_val, max_date_val), 
-        format="YYYY-MM-DD", 
-        key=f"{key_prefix}_date",
-        help="Drag start and end handles to constrain analysis to a specific chronological timeframe."
-    )
-    start_d, end_d = selected_range
-    return data_frame[(data_frame['Date_Only'] >= start_d) & (data_frame['Date_Only'] <= end_d)]
-
-# ---------------------------------------------------------
-# 2. COLLAPSIBLE INTERACTIVE VISUALIZATIONS SECTION
-# ---------------------------------------------------------
-with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
-    t_breakdown, t_comparison, t_temporal, t_heatmap, t_catalog = st.tabs([
-        "📊 Breakdowns",
+with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
+    t_breakdown, t_comparison, t_temporal, t_heatmap = st.tabs([
+        "📊 Breakdowns & Catalog",
         "📅 Date Comparisons",
         "📈 Time Trends",
-        "🔥 Heatmaps",
-        "📋 Catalog & Rankings"
+        "🔥 Temporal Heatmaps"
     ])
 
     # --- TAB 1: BREAKDOWNS ---
@@ -1458,9 +1292,9 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
                 filtered_t_df = date_filtered_t[date_filtered_t[target_tdim].astype(str).isin(selected_tvals)]
 
             days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-            c_tr, c_dw = st.columns(2)
+            # Full width trend layout
             
-            with c_tr:
+            # Monthly trend chart
                 if 1 < filtered_t_df[target_tdim].nunique() <= 10:
                     monthly = filtered_t_df.groupby(['Month_Year', target_tdim], observed=True).size().reset_index(name="Volume")
                     fig_m = px.line(monthly, x='Month_Year', y='Volume', color=target_tdim, markers=True, title=f"Monthly Trend by {target_tdim}")
@@ -1636,4 +1470,15 @@ with st.expander("📊 Interactive Visualizations & Catalog", expanded=True):
             "text/csv",
             key=f"dl_{clean_export_name}",
             help="Download the filtered catalog table as a sanitized CSV file."
+        )
+
+    with st.expander("📄 View Ingested Raw Data Table", expanded=False):
+        st.caption(f"Displaying {len(df):,} cleaned rows.")
+        st.dataframe(df.head(1000), use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Download Ingested Dataset (CSV)",
+            df.to_csv(index=False).encode('utf-8'),
+            "cleaned_streaming_history.csv",
+            "text/csv",
+            key="dl_clean_history"
         )
