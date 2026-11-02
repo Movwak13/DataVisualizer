@@ -636,9 +636,9 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
                     val_sample = df[col].dropna()
                     unit = 'ms' if not val_sample.empty and val_sample.iloc[0] > 1e11 else 's'
                     p = pd.to_datetime(df[col], unit=unit, errors='coerce')
-            else:
+                else:
                     p = pd.to_datetime(df[col], errors='coerce')
-                
+
                 if p.notna().sum() > 0.5 * len(df):
                     df[f"{col}_dt"] = p
                     df['Date_Only'] = p.dt.date
