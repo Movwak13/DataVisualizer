@@ -803,6 +803,59 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
             render_export_bar(fig, grouped, f"breakdown_{group_col}_{lbl}", total_rows=len(summary_top))
             
+
+            # --- FEATURE 1: SKIP VS. LOYALTY MATRIX ---
+            if "reason_end" in active_chart_df.columns:
+                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                st.subheader("🎯 Skip vs. Loyalty Matrix")
+                st.caption("Identify true favorites vs. shuffle fatigue by comparing total plays against full completion rate.")
+
+                df_matrix = active_chart_df.copy()
+                is_full_play = df_matrix['reason_end'].astype(str).str.lower().isin(['trackdone', 'natural_end', 'end'])
+                is_skip = df_matrix['reason_end'].astype(str).str.lower().isin(['fwdbtn', 'manual_skip', 'skip'])
+
+                matrix_agg = df_matrix.groupby(group_col, observed=True).agg(
+                    Total_Plays=(group_col, 'count'),
+                    Full_Plays=('reason_end', lambda s: is_full_play.loc[s.index].sum()),
+                    Skips=('reason_end', lambda s: is_skip.loc[s.index].sum()),
+                    Hours_Played=('Hours Played', 'sum') if 'Hours Played' in df_matrix.columns else (group_col, 'count')
+                ).reset_index()
+
+                matrix_agg = matrix_agg[matrix_agg['Total_Plays'] >= 3].copy()
+                if not matrix_agg.empty:
+                    matrix_agg['Completion_Rate'] = ((matrix_agg['Full_Plays'] / matrix_agg['Total_Plays']) * 100).round(1)
+                    matrix_agg['Hours_Played'] = matrix_agg['Hours_Played'].round(2)
+
+                    # Inspect top 60 items by total plays for readable scatter canvas
+                    plot_matrix = matrix_agg.sort_values(by='Total_Plays', ascending=False).head(60).copy()
+
+                    med_plays = plot_matrix['Total_Plays'].median()
+                    med_rate = plot_matrix['Completion_Rate'].median()
+
+                    fig_scatter = px.scatter(
+                        plot_matrix,
+                        x="Total_Plays",
+                        y="Completion_Rate",
+                        size="Hours_Played" if 'Hours Played' in df.columns else "Total_Plays",
+                        hover_name=group_col,
+                        hover_data={"Total_Plays": True, "Completion_Rate": ":.1f%", "Full_Plays": True, "Skips": True, "Hours_Played": True},
+                        color="Completion_Rate",
+                        color_continuous_scale=selected_palette,
+                        title=f"Loyalty Matrix: Completion Rate vs. Plays for Top {len(plot_matrix)} {group_col}s"
+                    )
+
+                    fig_scatter.add_vline(x=med_plays, line_dash="dash", line_color="rgba(255,255,255,0.25)")
+                    fig_scatter.add_hline(y=med_rate, line_dash="dash", line_color="rgba(255,255,255,0.25)")
+
+                    fig_scatter.update_layout(
+                        paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                        xaxis=dict(title="Total Plays (Stream Count)", gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
+                        yaxis=dict(title="Completion Rate (%)", range=[0, 105], gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
+                        margin=dict(l=60, r=40, t=50, b=50), height=460, autosize=True
+                    )
+                    st.plotly_chart(fig_scatter, use_container_width=True, config={'responsive': True})
+                    render_export_bar(fig_scatter, plot_matrix, f"loyalty_matrix_{group_col}")
+
             with st.expander("📋 Searchable Master Catalog & Table"):
                 st.dataframe(grouped.sort_values(by=lbl, ascending=False), hide_index=True, use_container_width=True)
 
@@ -966,6 +1019,57 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             )
             st.plotly_chart(fig_m, use_container_width=True, config={'responsive': True})
             render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
+
+            # --- FEATURE 2: OBSESSION TIMELINE / MUSICAL ERAS ---
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            st.subheader("⏳ Obsession Timelines (Musical Eras)")
+            st.caption("Track how your top artists or genres dominated your rotation across different months.")
+
+            era_col1, era_col2 = st.columns([1, 1])
+            era_dim = era_col1.selectbox("Track Eras By:", ordered_cat_cols, index=0, key="era_dim_sel")
+            era_mode = era_col2.radio("Chart Mode:", ["Percentage Share (% of Monthly Listening)", "Absolute Monthly Volume"], horizontal=True, key="era_mode_sel")
+
+            # Get overall top 7 items
+            top_eras = (
+                filtered_t_df.groupby(era_dim, observed=True).size()
+                .sort_values(ascending=False)
+                .head(7)
+                .index.tolist()
+            )
+
+            if top_eras:
+                era_df = filtered_t_df[filtered_t_df[era_dim].isin(top_eras)].copy()
+                era_grouped = era_df.groupby(['Month_Year', era_dim], observed=True).size().reset_index(name="Volume")
+
+                if "Percentage" in era_mode:
+                    total_monthly = filtered_t_df.groupby('Month_Year', observed=True).size().reset_index(name="Total_Month_Vol")
+                    era_grouped = era_grouped.merge(total_monthly, on='Month_Year')
+                    era_grouped['Share'] = ((era_grouped['Volume'] / era_grouped['Total_Month_Vol']) * 100).round(1)
+                    
+                    fig_era = px.area(
+                        era_grouped, x='Month_Year', y='Share', color=era_dim,
+                        title=f"Monthly Listening Share (%): Top {len(top_eras)} {era_dim}s",
+                        labels={'Share': '% Share of Month', 'Month_Year': 'Month'},
+                        color_discrete_sequence=px.colors.qualitative.Plotly
+                    )
+                    fig_era.update_layout(yaxis=dict(ticksuffix="%"))
+                else:
+                    fig_era = px.area(
+                        era_grouped, x='Month_Year', y='Volume', color=era_dim,
+                        title=f"Monthly Listening Volume: Top {len(top_eras)} {era_dim}s",
+                        labels={'Volume': 'Plays', 'Month_Year': 'Month'},
+                        color_discrete_sequence=px.colors.qualitative.Plotly
+                    )
+
+                fig_era.update_layout(
+                    paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                    xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
+                    yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
+                    margin=dict(l=60, r=40, t=50, b=50), height=460, autosize=True
+                )
+                st.plotly_chart(fig_era, use_container_width=True, config={'responsive': True})
+                render_export_bar(fig_era, era_grouped, f"obsession_timeline_{era_dim}")
+
 
     # --- TAB 4: HEATMAPS ---
     with t_heatmap:
