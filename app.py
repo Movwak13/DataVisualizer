@@ -1027,7 +1027,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                         key="b_date_side",
                         help="Restrict the bar chart analysis to plays within this calendar window."
                     )
-            else:
+                else:
                     top_n = chosen_top_n
                     start_d, end_d = st.slider(
                         "📅 Date Range Selection:", 
