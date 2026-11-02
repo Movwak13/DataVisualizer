@@ -1,4 +1,4 @@
-from genre_service import enrich_artists_with_spotify
+﻿from genre_service import enrich_artists_with_spotify
 import io, json, logging, os, re, sys, traceback, gc
 from datetime import datetime, date
 from urllib.parse import urlparse
@@ -54,7 +54,7 @@ def log_error(context: str, exc: Exception, user_msg: str):
     st.sidebar.error(f"⚠️ {user_msg}")
 
 # ---------------------------------------------------------
-# SENSITIVE PII & IP SANITIZATION ENGINE (OPTIMIZED)
+# SENSITIVE PII & IP SANITIZATION ENGINE
 # ---------------------------------------------------------
 IPV4_REGEX = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
 IPV6_REGEX = r'\b(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}\b'
@@ -93,7 +93,6 @@ def strip_ip_addresses(dataframe: pd.DataFrame) -> pd.DataFrame:
     if cols_to_drop:
         dataframe = dataframe.drop(columns=cols_to_drop, errors='ignore')
 
-    # Efficiently scrub only columns likely to contain network IPs
     target_text_cols = [c for c in dataframe.columns if str(c).lower().strip() in IP_SUSPECT_COLS]
     for col in target_text_cols:
         dataframe[col] = (
@@ -184,11 +183,10 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# ACCESSIBLE (WCAG 2.2 AA) CSS & SKIP-LINKS
+# ACCESSIBLE (WCAG 2.2 AA) CSS
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-    /* WCAG 2.4.1: Skip Link */
     .skip-to-main {
         position: absolute;
         top: -100px;
@@ -202,21 +200,12 @@ st.markdown("""
         text-decoration: none;
         transition: top 0.2s ease;
     }
-    .skip-to-main:focus {
-        top: 10px;
-    }
-
+    .skip-to-main:focus { top: 10px; }
     .block-container {
         padding-top: 2.25rem !important;
         padding-bottom: 2.5rem !important;
         padding-left: clamp(1rem, 3vw, 2.5rem) !important;
         padding-right: clamp(1rem, 3vw, 2.5rem) !important;
-    }
-    html {
-        -webkit-tap-highlight-color: transparent;
-        text-rendering: optimizeLegibility;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
     }
     .app-title-wrapper {
         margin: 0.25rem 0 1.25rem 0;
@@ -238,13 +227,6 @@ st.markdown("""
         border-radius: 8px 8px 0px 0px !important;
         background-color: rgba(255, 255, 255, 0.05) !important;
         border-bottom: 2px solid rgba(255, 255, 255, 0.12) !important;
-        overflow-x: auto !important;
-        white-space: nowrap !important;
-        -webkit-overflow-scrolling: touch !important;
-        scrollbar-width: none !important;
-    }
-    div[data-testid="stTabs"] div[role="tablist"]::-webkit-scrollbar {
-        display: none !important;
     }
     div[data-testid="stTabs"] button[role="tab"] {
         border-radius: 8px 8px 0px 0px !important;
@@ -253,20 +235,13 @@ st.markdown("""
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
         border-bottom: none !important;
         background-color: transparent !important;
-        flex-shrink: 0 !important;
         min-height: 42px !important;
-    }
-    div[data-testid="stTabs"] button[role="tab"]:hover {
-        background-color: rgba(255, 255, 255, 0.08) !important;
     }
     div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
         background-color: rgba(255, 255, 255, 0.12) !important;
         border: 1px solid rgba(255, 255, 255, 0.18) !important;
         border-bottom: 3px solid #EF4444 !important;
         font-weight: 600 !important;
-    }
-    div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
-        display: none !important;
     }
     .sidebar-nav-label {
         font-size: 0.82rem;
@@ -276,15 +251,6 @@ st.markdown("""
         color: #94A3B8;
         margin-bottom: 8px;
     }
-    [data-testid="stSidebar"] div.row-widget.stButton button {
-        border-radius: 6px !important;
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        padding: 8px 6px !important;
-        min-height: 40px !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    }
-    /* WCAG 1.4.3: Contrast-Compliant Notice Card */
     .legal-card {
         background-color: #2D1515;
         border: 1px solid #EF4444;
@@ -295,14 +261,8 @@ st.markdown("""
         line-height: 1.45;
         color: #FEE2E2;
     }
-    .legal-card strong {
-        color: #F87171;
-    }
 </style>
 <a href="#main-dashboard-content" class="skip-to-main">Skip to main content</a>
-""", unsafe_allow_html=True)
-
-st.markdown("""
 <div class="app-title-wrapper" role="banner">
     <h1 class="app-title-text">📊 Universal Multi-Select Data Visualizer</h1>
 </div>
@@ -314,7 +274,6 @@ st.markdown("""
 # ---------------------------------------------------------
 st.sidebar.markdown("<div class='sidebar-nav-label'>🧭 Navigation</div>", unsafe_allow_html=True)
 col_nav1, col_nav2 = st.sidebar.columns(2)
-
 is_vis_active = (st.session_state.nav_mode == "Visualize My Data")
 
 with col_nav1:
@@ -343,40 +302,72 @@ with st.sidebar.expander("📁 Dashboard Controls", expanded=False):
 
 with st.sidebar.expander("🎨 Stylings & Colors", expanded=False):
     available_palettes = STYLING_CFG.get("palettes", ["Viridis", "Plasma", "Turbo"])
-    selected_palette = st.selectbox(
-        "Color Palette:", 
-        available_palettes, 
-        index=0, 
-        help="Select gradient color ramps applied to bar charts, heatmaps, and trend lines."
-    )
-    export_theme = st.selectbox(
-        "PNG Export Background:", 
-        ["Dark Canvas", "Light Canvas"], 
-        index=0, 
-        help="Determines whether image downloads render with a dark canvas (#111827) or light canvas (#FFFFFF)."
-    )
+    selected_palette = st.selectbox("Color Palette:", available_palettes, index=0)
+    export_theme = st.selectbox("PNG Export Background:", ["Dark Canvas", "Light Canvas"], index=0)
 
 chart_bg = "#111827" if export_theme == "Dark Canvas" else "#FFFFFF"
 chart_text = "#E5E7EB" if export_theme == "Dark Canvas" else "#111827"
 chart_grid = "#1F2937" if export_theme == "Dark Canvas" else "#E5E7EB"
 
 # ---------------------------------------------------------
-# DATA & PLATFORM INGESTION (LEGALLY SECURED & BOUNDED)
+# EXPORT & UTILITY HELPERS
+# ---------------------------------------------------------
+def render_export_bar(fig, table_df, base_name, total_rows=None):
+    c1, c2, _ = st.columns([1, 1, 3])
+    with c1:
+        st.download_button(
+            "📥 Download CSV", 
+            table_df.to_csv(index=False).encode('utf-8'), 
+            f"{base_name}.csv", 
+            "text/csv", 
+            key=f"csv_{base_name}"
+        )
+    with c2:
+        try:
+            st.download_button(
+                "🖼️ Download PNG", 
+                fig.to_image(format="png", width=1200, height=700, scale=2), 
+                f"{base_name}.png", 
+                "image/png", 
+                key=f"png_{base_name}"
+            )
+        except Exception as e:
+            logger.warning(f"PNG render unavailable: {str(e)}")
+
+def apply_date_range_filter(data_df, key_prefix):
+    dt_c = next((c for c in data_df.columns if c.endswith('_dt')), None)
+    if not dt_c or not enable_date_filtering:
+        return data_df
+    
+    min_d = data_df[dt_c].min().date()
+    max_d = data_df[dt_c].max().date()
+    if min_d == max_d:
+        return data_df
+    
+    s_d, e_d = st.slider(
+        "📅 Date Filter:", 
+        min_value=min_d, 
+        max_value=max_d, 
+        value=(min_d, max_d), 
+        format="YYYY-MM-DD", 
+        key=f"{key_prefix}_d_slider"
+    )
+    return data_df[(data_df['Date_Only'] >= s_d) & (data_df['Date_Only'] <= e_d)]
+
+# ---------------------------------------------------------
+# DATA INGESTION ENGINE
 # ---------------------------------------------------------
 with st.sidebar.expander("💾 Data & Platform", expanded=True):
     st.markdown("""
     <div class="legal-card" role="region" aria-label="Privacy Notice">
         <strong>⚠️ NOTICE & PRIVACY DISCLAIMER:</strong><br>
-        Do <strong>NOT</strong> upload sensitive, proprietary, confidential, or legally protected data. 
-        This includes <strong>Protected Health Information (PHI)</strong> under HIPAA, financial/banking details, 
-        social security numbers, passwords, or classified material.<br><br>
-        This utility is provided <em>"AS IS"</em> without warranty of any kind. This application is <strong>not a HIPAA Covered Entity or Business Associate</strong>. 
-        By uploading data, you confirm that your files contain exclusively public or non-sensitive personal records and agree to hold harmless and indemnify the project owner from any liability, damages, or regulatory violations.
+        Do <strong>NOT</strong> upload sensitive, proprietary, confidential, or legally protected data.
+        Processed in temporary container memory only.
     </div>
     """, unsafe_allow_html=True)
 
     terms_accepted = st.checkbox(
-        "I certify that my files contain NO sensitive data, PHI (HIPAA), or confidential info, and accept these terms.",
+        "I certify that my files contain NO sensitive data, PHI, or confidential info.",
         value=False,
         key="legal_acknowledgment",
         on_change=purge_and_reset_uploads
@@ -391,16 +382,11 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             "Upload Files (CSV, Excel, JSON)", 
             type=["csv", "xlsx", "xls", "json"], 
             accept_multiple_files=True,
-            key=f"uploader_{st.session_state.uploader_key}",
-            help="Select streaming history files or spreadsheets. Processed in volatile memory only."
+            key=f"uploader_{st.session_state.uploader_key}"
         )
-        gsheet = st.text_input(
-            "Public Google Sheet URL", 
-            placeholder="https://docs.google.com/spreadsheets/d/...",
-            help="Enter a public Google Sheets sharing link. First sheet will be fetched via secure HTTPS."
-        )
+        gsheet = st.text_input("Public Google Sheet URL", placeholder="https://docs.google.com/spreadsheets/d/...")
 
-        if st.button("🗑️ Reset Session & Clear Data", use_container_width=True, help="Immediately releases all memory structures and resets the view."):
+        if st.button("🗑️ Reset Session & Clear Data", use_container_width=True):
             for k in list(st.session_state.keys()):
                 if k not in ["uploader_key", "legal_acknowledgment", "nav_mode"]:
                     st.session_state.pop(k, None)
@@ -410,95 +396,48 @@ with st.sidebar.expander("💾 Data & Platform", expanded=True):
             st.rerun()
 
     def validate_gsheet_url(url: str) -> bool:
-        if not url:
-            return False
-        clean_url = url.strip()
-        parsed = urlparse(clean_url)
-        if parsed.scheme != "https" or parsed.netloc != "docs.google.com":
-            return False
-        return bool(re.match(r"^/spreadsheets/d/([a-zA-Z0-9-_]+)", parsed.path))
+        if not url: return False
+        parsed = urlparse(url.strip())
+        return parsed.scheme == "https" and parsed.netloc == "docs.google.com" and bool(re.match(r"^/spreadsheets/d/([a-zA-Z0-9-_]+)", parsed.path))
 
     def inspect_header_signature(uploaded_files, gsheet_url):
         cols_found = set()
         if uploaded_files:
             first_file = uploaded_files[0]
-            if hasattr(first_file, 'size') and first_file.size > MAX_FILE_BYTES:
-                return None
             try:
                 first_file.seek(0)
                 fn = first_file.name.lower()
-                if fn.endswith('.csv'):
-                    cols_found.update(pd.read_csv(first_file, nrows=2).columns)
-                elif fn.endswith(('.xlsx', '.xls')):
-                    cols_found.update(pd.read_excel(first_file, nrows=2).columns)
+                if fn.endswith('.csv'): cols_found.update(pd.read_csv(first_file, nrows=2).columns)
+                elif fn.endswith(('.xlsx', '.xls')): cols_found.update(pd.read_excel(first_file, nrows=2).columns)
                 elif fn.endswith('.json'):
                     content_json = json.load(first_file)
                     df_sample = pd.json_normalize(content_json[:2] if isinstance(content_json, list) else [content_json])
                     cols_found.update(df_sample.columns)
                 first_file.seek(0)
-            except Exception as e:
-                logger.warning(f"Signature detection read issue: {type(e).__name__}")
-
-        if not cols_found and validate_gsheet_url(gsheet_url):
-            try:
-                m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", gsheet_url.strip())
-                if m:
-                    res = requests.get(
-                        f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid=0",
-                        timeout=5,
-                        allow_redirects=False,
-                        headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"},
-                        stream=True
-                    )
-                    if res.status_code == 200:
-                        content_chunk = b""
-                        for chunk in res.iter_content(chunk_size=4096):
-                            content_chunk += chunk
-                            if len(content_chunk) > 32768:
-                                break
-                        cols_found.update(pd.read_csv(io.BytesIO(content_chunk), nrows=2).columns)
-            except Exception as e:
-                logger.warning(f"GSheet signature detection issue: {type(e).__name__}")
+            except Exception: pass
 
         cols_lower = {str(c).lower().strip() for c in cols_found}
-        if any(k in cols_lower for k in ['master_metadata_track_name', 'msplayed', 'ms_played', 'conn_country']):
-            return "Spotify"
-        if any(k in cols_lower for k in ['event start timestamp', 'play duration milliseconds', 'content name']):
-            return "Apple Music"
-        if any(k in cols_lower for k in ['station_name', 'station_history', 'track_title']) or ('artist_name' in cols_lower and 'album_title' in cols_lower):
-            return "Pandora"
-        if any(k in cols_lower for k in ['titleurl', 'subtitles']) or ('title' in cols_lower and 'header' in cols_lower):
-            return "YouTube Music"
-        if any(k in cols_lower for k in ['trackname', 'songtitle']) or ('artistname' in cols_lower and 'albumtitle' in cols_lower) or any(k in cols_lower for k in ['playdate', 'eventtimestamp']):
-            return "Amazon Music"
-        return None
+        if any(k in cols_lower for k in ['master_metadata_track_name', 'msplayed', 'ms_played', 'conn_country']): return "Spotify"
+        if any(k in cols_lower for k in ['event start timestamp', 'play duration milliseconds', 'content name']): return "Apple Music"
+        if any(k in cols_lower for k in ['station_name', 'station_history', 'track_title']): return "Pandora"
+        if any(k in cols_lower for k in ['titleurl', 'subtitles']): return "YouTube Music"
+        if any(k in cols_lower for k in ['trackname', 'songtitle']) or any(k in cols_lower for k in ['playdate', 'eventtimestamp']): return "Amazon Music"
+        return "Other"
 
-    detected_platform = inspect_header_signature(uploaded, gsheet) if terms_accepted else None
+    detected_platform = inspect_header_signature(uploaded, gsheet) if terms_accepted else "Other"
     profile_names = list(DATASET_PROFILES.keys())
     active_idx = profile_names.index(detected_platform) if detected_platform in profile_names else profile_names.index("Other")
 
-    selected_profile = st.selectbox(
-        "Dataset Platform:", 
-        profile_names, 
-        index=active_idx, 
-        disabled=False,
-        help="Specifies the data schema for music metrics. Auto-detected from file headers, but you can override it manually."
-    )
-    if detected_platform:
-        st.caption(f"Auto-detected platform: {detected_platform}")
+    selected_profile = st.selectbox("Dataset Platform:", profile_names, index=active_idx)
 
 # ---------------------------------------------------------
-# OPTIMIZED SANITIZATION & SAFE EXPORT (INJECTION HARDENED)
+# SANITIZATION & SAFE EXPORT
 # ---------------------------------------------------------
 def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
-    # CWE-1236 hardened pattern: catches leading spaces or control chars before injection tokens
     injection_pattern = r"^\s*[-=+@\t\r]"
     str_cols = df_in.select_dtypes(include=['object', 'string', 'category']).columns
-    
     if len(str_cols) == 0:
         return df_in.to_csv(index=False).encode('utf-8')
-    
-    # Process without whole-table duplication
     csv_buffer = io.StringIO()
     df_copy = df_in.copy(deep=False)
     for col in str_cols:
@@ -506,55 +445,29 @@ def sanitize_csv_data(df_in: pd.DataFrame) -> bytes:
         bad_mask = s.str.contains(injection_pattern, regex=True, na=False)
         if bad_mask.any():
             df_copy[col] = np.where(bad_mask, "'" + s, s)
-            
     df_copy.to_csv(csv_buffer, index=False)
     return csv_buffer.getvalue().encode('utf-8')
 
 def parse_gsheet_url(url: str):
-    if not validate_gsheet_url(url):
-        raise ValueError("Invalid Google Sheets URL schema.")
     m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
     gid_m = re.search(r"[#&]gid=([0-9]+)", url)
     gid = gid_m.group(1) if gid_m else "0"
-    
-    # DoS protection: stream response with bounded length limit
-    res = requests.get(
-        f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid={gid}", 
-        timeout=10,
-        allow_redirects=False,
-        headers={"User-Agent": "DataVisualizer-CloudSecure/1.0"},
-        stream=True
-    )
+    res = requests.get(f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv&gid={gid}", timeout=10)
     res.raise_for_status()
-    
-    downloaded = 0
-    chunks = []
-    for chunk in res.iter_content(chunk_size=65536):
-        downloaded += len(chunk)
-        if downloaded > MAX_FILE_BYTES:
-            raise ValueError(f"Google Sheet payload exceeded maximum size limit ({MAX_FILE_BYTES // (1024*1024)} MB).")
-        chunks.append(chunk)
-        
-    return pd.read_csv(io.BytesIO(b"".join(chunks)))
+    return pd.read_csv(io.BytesIO(res.content))
 
 def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True):
     frames = []
     if uploaded_files:
         for f in uploaded_files:
-            if hasattr(f, 'size') and f.size > MAX_FILE_BYTES:
-                st.error(f"File exceeds maximum allowed size ({MAX_FILE_BYTES // (1024*1024)} MB).")
-                continue
             try:
                 f.seek(0)
                 fn = f.name.lower()
-                if fn.endswith('.csv'):
-                    frames.append(pd.read_csv(f))
-                elif fn.endswith(('.xlsx', '.xls')):
-                    frames.append(pd.read_excel(f))
+                if fn.endswith('.csv'): frames.append(pd.read_csv(f))
+                elif fn.endswith(('.xlsx', '.xls')): frames.append(pd.read_excel(f))
                 elif fn.endswith('.json'):
                     c = json.load(f)
-                    c = clean_raw_json_obj(c)
-                    frames.append(pd.json_normalize(c if isinstance(c, list) else [c]))
+                    frames.append(pd.json_normalize(clean_raw_json_obj(c) if isinstance(c, list) else [clean_raw_json_obj(c)]))
             except Exception as e:
                 log_error("File Parsing", e, "A file could not be parsed.")
 
@@ -564,31 +477,16 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
         except Exception as e:
             log_error("Google Sheets Ingestion", e, "Failed to load public Google Sheet.")
 
-    if not frames: 
-        return pd.DataFrame()
+    if not frames: return pd.DataFrame()
 
     df = pd.concat(frames, ignore_index=True)
-    del frames
-
     df = strip_ip_addresses(df)
 
     if 'Track' in df.columns and df['Track'].astype(str).str.startswith("Watched ").any():
         df['Track'] = df['Track'].astype(str).str.replace(r"^Watched\s+", "", regex=True)
-    if 'subtitles' in df.columns and 'Artist' not in df.columns:
-        def extract_yt_artist(val):
-            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
-                return val[0].get('name', 'Unknown Artist')
-            elif isinstance(val, str) and 'name' in val:
-                try:
-                    parsed = json.loads(val.replace("'", "\""))
-                    return parsed[0].get('name', 'Unknown Artist') if isinstance(parsed, list) else 'Unknown Artist'
-                except Exception:
-                    return val
-            return val
-        df['Artist'] = df['subtitles'].apply(extract_yt_artist)
 
     if len(df) > MAX_TOTAL_ROWS:
-        st.warning(f"Dataset truncated to the first {MAX_TOTAL_ROWS:,} rows to maintain container stability.")
+        st.warning(f"Dataset truncated to the first {MAX_TOTAL_ROWS:,} rows.")
         df = df.iloc[:MAX_TOTAL_ROWS].copy()
 
     if is_music:
@@ -650,217 +548,29 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
             except Exception:
                 pass
 
-    dt_protected = {'Date_Only', 'Time_Only', 'Hour_Only', 'Day_of_Week', 'Month_Year', 'timestamp'}
-    for col in df.select_dtypes(include=['object', 'string']).columns:
-        if col not in dt_protected and not col.endswith('_dt'):
-            if df[col].nunique() < (len(df) * 0.5):
-                df[col] = df[col].astype('category')
-
     return df
 
-def compute_streaks_and_sessions(data_df, session_idle_minutes=30, start_date=None, end_date=None):
-    dt_candidates = [c for c in data_df.columns if c.endswith('_dt')]
-    if not dt_candidates:
-        return {}
-    
-    dt_col = dt_candidates[0]
-    ts_all = data_df[dt_col].dropna()
-    if ts_all.empty:
-        return {}
-
-    # Fast O(N log N) vectorized streak calculation
-    date_ints = np.unique(ts_all.values.astype('datetime64[D]').astype(np.int64))
-    if len(date_ints) <= 1:
-        longest_streak = len(date_ints)
-    else:
-        diffs = np.diff(date_ints)
-        streak_splits = np.where(diffs != 1)[0]
-        streak_lens = np.diff(np.concatenate(([-1], streak_splits, [len(date_ints) - 1])))
-        longest_streak = int(np.max(streak_lens))
-
-    total_active_days = len(date_ints)
-    if 'Hours Played' in data_df.columns and total_active_days > 0:
-        avg_daily_val = f"{(data_df['Hours Played'].sum() / total_active_days):.2f} hrs/day"
-    elif total_active_days > 0:
-        avg_daily_val = f"{(len(data_df) / total_active_days):.1f} tracks/day"
-    else:
-        avg_daily_val = "0.0 hrs/day"
-
-    return {
-        "longest_streak": longest_streak,
-        "daily_avg": avg_daily_val
-    }
-
 # ---------------------------------------------------------
-# GUIDE RENDERING ENGINE (OVERVIEW, REQUEST, & SHEET TABS)
+# GUIDE RENDERING ENGINE
 # ---------------------------------------------------------
 def render_full_guide():
     st.markdown("### 💡 What Can I Do Here?")
-    st.markdown("Explore your streaming activity, configure multi-select views, or follow instructions to export personal data from your music service.")
-    
-    t_overview, t_requests, t_sheets = st.tabs(["📋 Overview", "📥 How to Request Data", "📄 Spreadsheet Guide"])
+    t_overview, t_requests = st.tabs(["📋 Overview", "📥 How to Request Data"])
     
     with t_overview:
-        col_left, col_right = st.columns([1, 1], gap="large")
-        with col_left:
-            st.markdown("#### 🧭 Types of Visualizations Available")
-            st.markdown('''
-            <div style="margin-bottom: 12px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.03);">
-                <b>1. 📊 Multi-Select Breakdowns (Horizontal Bar Charts)</b><br>
-                Rank entities such as Artists, Albums, Songs, or categories by raw play count, total hours listened, or column averages.
-            </div>
-            <div style="margin-bottom: 12px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.03);">
-                <b>2. 📈 Multi-Select Time Trends (Time Series Line & Bar Charts)</b><br>
-                Track activity month-over-month or by day of the week, comparing multiple entities over time.
-            </div>
-            <div style="margin-bottom: 12px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.03);">
-                <b>3. 🔥 Temporal Density Heatmaps (Interactive Matrix)</b><br>
-                Spot peak activity windows (Day of Week vs. Hour of Day). Brighter tiles highlight when you are most active.
-            </div>
-            <div style="margin-bottom: 12px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background-color: rgba(255,255,255,0.03);">
-                <b>4. 📋 Catalog & Global Leaderboard</b><br>
-                Master searchable index of all items with total hours, counts, and instant CSV export.
-            </div>
-            ''', unsafe_allow_html=True)
-
-        with col_right:
-            st.markdown("#### 🎨 Interactive Sample Previews (Mock Data)")
-            sample_b_data = pd.DataFrame({
-                "Artist": ["Daft Punk", "The Weeknd", "Radiohead", "Kendrick Lamar", "Fleetwood Mac"],
-                "Hours": [82.4, 65.1, 54.3, 49.0, 38.6]
-            })
-            fig_sample_b = px.bar(
-                sample_b_data, x="Hours", y="Artist", orientation="h",
-                color="Hours", color_continuous_scale=selected_palette,
-                title="Sample Preview: Top Artists by Hours Played", text="Hours"
-            )
-            fig_sample_b.update_traces(texttemplate="%{text:.1f} hrs", textposition="outside", cliponaxis=False)
-            fig_sample_b.update_layout(
-                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                yaxis=dict(categoryorder="total ascending", automargin=True),
-                xaxis=dict(automargin=True, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-                margin=dict(l=100, r=40, t=40, b=30), height=230
-            )
-            st.plotly_chart(fig_sample_b, use_container_width=True, config={'responsive': True})
-
-            days_sample = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-            hours_sample = [f"{h:02d}:00" for h in range(0, 24, 2)]
-            np.random.seed(42)
-            mock_matrix = np.random.randint(5, 75, size=(len(days_sample), len(hours_sample)))
-            mock_matrix[4:6, 7:10] += 45
-
-            fig_sample_h = px.imshow(
-                mock_matrix, labels=dict(x="Hour of Day", y="Day of Week", color="Plays"),
-                x=hours_sample, y=days_sample, aspect="auto", color_continuous_scale=selected_palette,
-                title="Sample Preview: Activity Density Heatmap",
-                text_auto=True
-            )
-            fig_sample_h.update_layout(
-                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                yaxis=dict(automargin=True, color=chart_text), xaxis=dict(automargin=True, color=chart_text),
-                margin=dict(l=80, r=40, t=40, b=30), height=240
-            )
-            st.plotly_chart(fig_sample_h, use_container_width=True, config={'responsive': True})
-
-            with st.expander("💡 How to Use the Temporal Density Heatmap", expanded=False):
-                st.markdown('''
-                * **Identify Listening Routines:** Compare `Day of Week` vs. `Hour of Day` to see if you listen mostly during your morning commute, during the workday, or late on weekends.
-                * **Filter Down by Artist or Genre:** Use the slice filter below the axis controls to isolate a single artist (e.g., *Radiohead*) to see what time of day you play them.
-                * **Spot Outliers:** Bright tiles and embedded numerical counts indicate high clusters of plays, while dark tiles reveal silent windows.
-                ''')
+        st.markdown('''
+        * **📊 Multi-Select Breakdowns:** Rank items by play count, total hours listened, or column averages.
+        * **📅 Period Comparisons:** Compare listening habits across multiple years or specific months side-by-side.
+        * **📈 Time Trends:** Monthly activity volume trend lines with multi-item selection.
+        * **🔥 Temporal Heatmaps:** Identify hourly activity clusters across days of the week.
+        ''')
 
     with t_requests:
-        st.markdown("#### 📥 Where & How to Download Your Data")
-        st.caption("Select your streaming provider below for step-by-step instructions and direct portal links.")
-
-        with st.expander("🟢 Spotify (Extended Streaming History)", expanded=True):
-            st.markdown('''
-            * **Direct Privacy Portal:** [Spotify Privacy Settings](https://www.spotify.com/account/privacy/)
-            * **Steps to Request:**
-                1. Sign in to your Spotify Account and scroll down to **Download your data**.
-                2. Request **Step 2: Extended streaming history** (the lifetime audio history) rather than the standard basic package.
-                3. Confirm the verification email sent by Spotify.
-            * **Delivery Time:** Typically 5 to 14 days.
-            * **What to Upload:** Spotify delivers `.zip` batches containing files named `Streaming_History_Audio_*.json` or `endsong_*.json`. Drag and drop these `.json` files directly into this visualizer.
-            ''')
-
-        with st.expander("🍎 Apple Music", expanded=False):
-            st.markdown('''
-            * **Direct Privacy Portal:** [Apple Data & Privacy](https://privacy.apple.com)
-            * **Steps to Request:**
-                1. Sign in with your Apple ID.
-                2. Under *Manage your data*, click **Request a copy of your data**.
-                3. Check the box for **Apple Media Services information** and submit.
-            * **Delivery Time:** Typically 2 to 5 days.
-            * **What to Upload:** In the downloaded archive, open `Apple_Media_Services/Apple Music Activity/` and upload `Apple Music Play Activity.csv`.
-            ''')
-
-        with st.expander("▶️ YouTube Music", expanded=False):
-            st.markdown('''
-            * **Direct Privacy Portal:** [Google Takeout](https://takeout.google.com/)
-            * **Steps to Request:**
-                1. Click **Deselect all**, then scroll down to **YouTube and YouTube Music**.
-                2. Under the format settings, click **All YouTube data included** and select only **history**.
-                3. Choose **JSON** as the export format if prompted, then click **Create export**.
-            * **Delivery Time:** A few minutes to several hours.
-            * **What to Upload:** Extract the downloaded archive and upload `YouTube and YouTube Music/history/watch-history.json`.
-            ''')
-
-        with st.expander("📦 Amazon Music", expanded=False):
-            st.markdown('''
-            * **Direct Privacy Portal:** [Amazon Privacy Central (Request My Data)](https://www.amazon.com/hz/privacy-central/data-requests/preview.html)
-            * **Steps to Request:**
-                1. Sign in to your Amazon account and navigate to *Request Your Information*.
-                2. In the category dropdown, select **Amazon Music**.
-                3. Submit the request and confirm via the verification link sent to your email.
-            * **Delivery Time:** 24 to 72 hours.
-            * **What to Upload:** Upload the received `.csv` or `.json` file (typically `PlayHistory.csv` or `Amazon_Music_Listening_History.csv`).
-            ''')
-
-        with st.expander("📻 Pandora", expanded=False):
-            st.markdown('''
-            * **Direct Privacy Portal:** [Pandora Help Center & Privacy](https://help.pandora.com/)
-            * **Steps to Request:**
-                1. Submit a customer privacy request under **"Request My Personal Information"** (GDPR / CCPA / US Privacy rights).
-                2. Pandora support will verify your identity and generate your account listening archive.
-                * **What to Upload:** Upload the delivered `station_history.csv` or `play_history.csv`.
-            ''')
-
-    with t_sheets:
-        st.markdown("#### 📄 How to Format Excel & Google Sheets")
-        st.caption("Ensure your spreadsheets load smoothly and map accurately to charts and summaries.")
-
-        with st.expander("🔗 Google Sheets: Sharing & Link Requirements", expanded=True):
-            st.markdown('''
-            To allow the visualizer to read a public Google Sheet:
-            1. Click **Share** in the top right corner of your Google Sheet.
-            2. Under *General access*, change the dropdown from **Restricted** to **"Anyone with the link"** with **Viewer** access.
-            3. Copy the URL from your browser address bar (e.g. `https://docs.google.com/spreadsheets/d/.../edit#gid=0`).
-            4. **Tab Placement:** The visualizer reads the first tab (`gid=0`) by default. Ensure your primary data table is on the very first tab.
-            ''')
-
-        with st.expander("📐 Recommended Table Structure", expanded=True):
-            st.markdown('''
-            * **Row 1 Must Be Headers:** Put attribute names directly in Row 1 (e.g., `Artist`, `Track`, `Album`, `PlayDate`). Avoid title banners, logo images, or blank rows at the top.
-            * **One Record Per Row:** Each row should represent an individual listening event, playback session, or transaction.
-            * **No Merged Cells or Subtotals:** Avoid merged cells or mid-table "Total" rows, as they disrupt automated column type casting.
-            ''')
-
-        with st.expander("🏷️ Recommended Column Headers for Auto-Mapping", expanded=False):
-            st.markdown('''
-            To have music stats (Hours, Tracks, Artists, Streaks) auto-populate, use any of these recognized header names:
-            
-            | Visualizer Metric | Recognized Header Aliases | Example Value |
-            | :--- | :--- | :--- |
-            | **Track / Song** | `Track`, `Track Name`, `SongTitle`, `Content Name` | *Bohemian Rhapsody* |
-            | **Artist** | `Artist`, `Artist Name`, `ArtistName` | *Queen* |
-            | **Album** | `Album`, `Album Title`, `AlbumTitle`, `Container Description` | *A Night at the Opera* |
-            | **Date & Time** | `timestamp`, `PlayDate`, `Event Start Timestamp`, `datetime`, `endTime` | *2024-03-15 14:30:00* |
-            | **Duration** | `ms_played`, `Play Duration Milliseconds`, `Duration` | *354000* (ms) or numeric seconds |
-            | **Platform / Device** | `Platform`, `Build Version`, `station_name` | *iOS*, *Desktop*, *Web* |
-            
-            *Note: For general non-music datasets, select **Other** under "Dataset Platform" to chart any numeric or categorical column.*
-            ''')
+        st.markdown('''
+        * **Spotify:** Go to [Spotify Privacy Settings](https://www.spotify.com/account/privacy/) and request **Extended Streaming History**.
+        * **Apple Music:** Visit [Apple Data & Privacy](https://privacy.apple.com) and export **Apple Music Play Activity.csv**.
+        * **YouTube Music:** Download history via [Google Takeout](https://takeout.google.com/).
+        ''')
 
 if nav_mode == "What Can I Do Here?":
     render_full_guide()
@@ -874,10 +584,8 @@ is_music_profile = DATASET_PROFILES.get(selected_profile, {}).get("is_music", Fa
 
 if not has_input_data:
     st.info("👋 Upload CSV, Excel, or JSON files, or paste a public Google Sheets link in the sidebar to begin analyzing your data.")
-    st.caption("🔒 **Online Privacy Protected:** Uploaded records exist solely in temporary container RAM during your active session. No user files are written to permanent server storage.")
     st.stop()
 
-# Compute a signature for uploaded input to prevent reparsing on every rerun
 upload_signature = (
     tuple((f.name, getattr(f, 'size', 0)) for f in uploaded) if uploaded else (),
     gsheet.strip() if gsheet else "",
@@ -890,24 +598,31 @@ if "cached_df" not in st.session_state or st.session_state.get("last_upload_sign
         st.session_state.last_upload_signature = upload_signature
 
 df = st.session_state.cached_df
-
 if df.empty:
     st.warning("No records ingested. Check format and contents.")
     st.stop()
 
-post_ingest_ram = get_container_ram_stats()
-logger.info(f"Ingestion complete: {len(df):,} rows. Process RAM: {post_ingest_ram['process_mb']:.1f} MB | Container RAM: {post_ingest_ram['container_mb']:.1f} MB")
-
 dt_col = next((c for c in df.columns if c.endswith('_dt')), None)
-if dt_col:
+has_datetime = (dt_col is not None)
+if has_datetime:
     d_start_val = df[dt_col].min().date()
     d_end_val = df[dt_col].max().date()
 else:
     d_start_val, d_end_val = None, None
 
-# ---------------------------------------------------------
-# 1. COLLAPSIBLE SUMMARY METRICS SECTION
-# ---------------------------------------------------------
+# Column detection
+primary_music_cols = ['Artist', 'Track (Artist)', 'Album (Artist)', 'Genre']
+existing_primary = [c for c in primary_music_cols if c in df.columns]
+other_cat_cols = [
+    c for c in df.select_dtypes(include=['object', 'category', 'string']).columns 
+    if not c.endswith('_dt') and c not in IGNORED_COLS and c not in ['Date_Only', 'Time_Only', 'Day_of_Week', 'Month_Year'] and c not in existing_primary
+]
+ordered_cat_cols = existing_primary + other_cat_cols
+if not ordered_cat_cols:
+    ordered_cat_cols = [c for c in df.columns if not c.endswith('_dt')]
+
+num_cols = df.select_dtypes(include=['number']).columns.tolist()
+
 # --- SUMMARY KPI BANNER ---
 st.markdown("<section aria-label='Summary KPI Banner'>", unsafe_allow_html=True)
 if is_music_profile:
@@ -929,9 +644,8 @@ if is_music_profile:
 else:
     k1, k2, k3 = st.columns(3)
     k1.metric("Total Records", f"{len(df):,}")
-    k2.metric("Dimensions", len([c for c in df.columns if df[c].dtype.name in ['object', 'category', 'string']]))
-    num_cols_s = df.select_dtypes(include=['number']).columns.tolist()
-    k3.metric("Numeric Measures", len(num_cols_s))
+    k2.metric("Dimensions", len(ordered_cat_cols))
+    k3.metric("Numeric Measures", len(num_cols))
 st.markdown("</section>", unsafe_allow_html=True)
 st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
 
@@ -943,7 +657,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
         "🔥 Temporal Heatmaps"
     ])
 
-    # --- TAB 1: BREAKDOWNS ---
+    # --- TAB 1: BREAKDOWNS & CATALOG ---
     with t_breakdown:
         st.subheader("Category Breakdown")
 
@@ -952,30 +666,26 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             "📊 Select Data to Chart (Y-Axis):", 
             ordered_cat_cols, 
             index=0, 
-            key="b_group",
-            help="Primary category to plot on the vertical Y-axis (e.g., Artist, Track, Album)."
+            key="b_group"
         )
         calc = c_calc.selectbox(
             "Calculation:", 
             ["Frequency / Count", "Sum of Column", "Average of Column"], 
-            key="b_calc",
-            help="Aggregation formula: Count totals plays, Sum totals numeric columns, Average calculates the mean."
+            key="b_calc"
         )
         val_c = c_num.selectbox(
             "Numeric Column:", 
             num_cols, 
-            key="b_val",
-            help="Select numeric column to sum or average when not using frequency count."
-        ) if calc != "Frequency / Count" else None
+            key="b_val"
+        ) if calc != "Frequency / Count" and num_cols else None
 
-        min_play_sec = c_duration.slider(
+        min_play_sec_b = c_duration.slider(
             "Min Play Duration (Sec):",
             min_value=0,
             max_value=60,
             value=30,
             step=5,
-            key="b_min_duration",
-            help="Filter out accidental skips and scrubbing by ignoring track plays shorter than this threshold."
+            key="b_min_duration"
         )
 
         group_lower = group_col.lower()
@@ -989,13 +699,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             canned_options = ["Custom (Use Slider)"]
 
         col_quick, col_cutoff = st.columns([1, 2])
-        quick_choice = col_quick.selectbox(
-            "⚡ Quick Visuals Preset:",
-            canned_options,
-            index=0,
-            key="b_quick_canned",
-            help="Instant leaderboard presets for this category, or choose Custom to manually control the count."
-        )
+        quick_choice = col_quick.selectbox("⚡ Quick Visuals Preset:", canned_options, index=0, key="b_quick_canned")
 
         is_custom = (quick_choice == "Custom (Use Slider)")
         if is_custom:
@@ -1010,49 +714,18 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             with col_cutoff:
                 if is_custom:
                     c_top_sub, c_date_sub = st.columns([1, 1])
-                    top_n = c_top_sub.slider(
-                        "Display Limit (Max 500):", 
-                        min_value=5, 
-                        max_value=500, 
-                        value=20, 
-                        key="b_top_side",
-                        help="Adjust how many ranked entries appear on the chart."
-                    )
-                    start_d, end_d = c_date_sub.slider(
-                        "📅 Date Range Selection:", 
-                        min_value=d_start_val, 
-                        max_value=d_end_val, 
-                        value=(d_start_val, d_end_val), 
-                        format="YYYY-MM-DD", 
-                        key="b_date_side",
-                        help="Restrict the bar chart analysis to plays within this calendar window."
-                    )
+                    top_n = c_top_sub.slider("Display Limit (Max 500):", min_value=5, max_value=500, value=20, key="b_top_side")
+                    start_d, end_d = c_date_sub.slider("📅 Date Range Selection:", min_value=d_start_val, max_value=d_end_val, value=(d_start_val, d_end_val), format="YYYY-MM-DD", key="b_date_side")
                 else:
                     top_n = chosen_top_n
-                    start_d, end_d = st.slider(
-                        "📅 Date Range Selection:", 
-                        min_value=d_start_val, 
-                        max_value=d_end_val, 
-                        value=(d_start_val, d_end_val), 
-                        format="YYYY-MM-DD", 
-                        key="b_date_side_canned",
-                        help="Restrict the bar chart analysis to plays within this calendar window."
-                    )
+                    start_d, end_d = st.slider("📅 Date Range Selection:", min_value=d_start_val, max_value=d_end_val, value=(d_start_val, d_end_val), format="YYYY-MM-DD", key="b_date_side_canned")
         else:
             with col_cutoff:
                 if is_custom:
-                    top_n = st.slider(
-                        "Display Limit (Max 500):", 
-                        min_value=5, 
-                        max_value=500, 
-                        value=20, 
-                        key="b_top_solo",
-                        help="Adjust how many ranked entries appear on the chart."
-                    )
-            else:
+                    top_n = st.slider("Display Limit (Max 500):", min_value=5, max_value=500, value=20, key="b_top_solo")
+                else:
                     top_n = chosen_top_n
-                    direction_label = "Bottom" if "Lowest" in ranking_direction else "Top"
-                    st.markdown(f"<div style='margin-top: 26px; font-size: 14px; color: #94A3B8;'><b>Preset Active:</b> Showing {direction_label.lower()} {top_n} {group_col}s</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='margin-top: 26px; font-size: 14px; color: #94A3B8;'><b>Preset Active:</b> Showing Top {top_n} {group_col}s</div>", unsafe_allow_html=True)
 
         available_slice_dims = [c for c in ordered_cat_cols if c != group_col]
         mask = np.ones(len(df), dtype=bool)
@@ -1069,8 +742,8 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
         if use_date_in_breakdown and d_start_val and d_start_val != d_end_val:
             mask &= (df['Date_Only'] >= start_d).to_numpy() & (df['Date_Only'] <= end_d).to_numpy()
 
-        if 'ms_played' in df.columns and min_play_sec > 0:
-            mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
+        if 'ms_played' in df.columns and min_play_sec_b > 0:
+            mask &= (df['ms_played'] >= (min_play_sec_b * 1000)).to_numpy()
 
         if exclude_unknowns:
             mask &= ~df[group_col].astype(str).str.strip().str.lower().isin(
@@ -1092,23 +765,21 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             grouped = pd.DataFrame(); lbl = ""
 
         if not grouped.empty:
-            is_ascending_sort = ("Lowest" in ranking_direction)
-            summary_top = grouped.sort_values(by=lbl, ascending=is_ascending_sort).head(top_n).copy()
+            summary_top = grouped.sort_values(by=lbl, ascending=False).head(top_n).copy()
             summary_top['formatted_label'] = summary_top[lbl].apply(lambda x: f"{int(x):,}" if isinstance(x, (int, float)) and float(x).is_integer() else f"{x:,.2f}")
 
-            rank_title_prefix = "Bottom" if is_ascending_sort else "Top"
             fig = px.bar(
                 summary_top, x=lbl, y=group_col, orientation='h', color=lbl, 
                 text='formatted_label' if show_bar_labels else None,
                 color_continuous_scale=selected_palette, 
-                title=f"{rank_title_prefix} {len(summary_top)} {group_col} by {lbl}"
+                title=f"Top {len(summary_top)} {group_col} by {lbl}"
             )
             if show_bar_labels:
                 fig.update_traces(textposition='outside', cliponaxis=False)
 
             ui_height = max(500, min(len(summary_top) * 26, 3200))
             yaxis_kwargs = dict(
-                categoryorder='total ascending' if not is_ascending_sort else 'total descending', 
+                categoryorder='total ascending', 
                 automargin=True,
                 showgrid=show_gridlines,
                 gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)"
@@ -1123,8 +794,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                     automargin=True, 
                     gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", 
                     showgrid=show_gridlines, 
-                    color=chart_text,
-                    type="log" if use_log_scale else "linear"
+                    color=chart_text
                 ),
                 margin=dict(l=max(200, min(int(summary_top[group_col].astype(str).str.len().max() * 9.5), 450)), r=80, t=50, b=50),
                 height=ui_height,
@@ -1132,8 +802,9 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             )
             st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
             render_export_bar(fig, grouped, f"breakdown_{group_col}_{lbl}", total_rows=len(summary_top))
-            with st.expander("View Data Table"):
-                st.dataframe(summary_top.drop(columns=['formatted_label'], errors='ignore'), hide_index=True, use_container_width=True)
+            
+            with st.expander("📋 Searchable Master Catalog & Table"):
+                st.dataframe(grouped.sort_values(by=lbl, ascending=False), hide_index=True, use_container_width=True)
 
     # --- TAB 2: DATE COMPARISONS ---
     with t_comparison:
@@ -1141,15 +812,13 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
         if not has_datetime:
             st.info("No timestamp field detected in this dataset to perform date comparisons.")
         else:
-            dt_col_cmp = next((c for c in df.columns if c.endswith("_dt")), None)
-            valid_dates_df = df.dropna(subset=[dt_col_cmp]).copy() if dt_col_cmp else pd.DataFrame()
+            valid_dates_df = df.dropna(subset=[dt_col]).copy()
             
             if valid_dates_df.empty:
                 st.warning("No valid timestamps available.")
             else:
-                # Extract available years and month-years
-                valid_dates_df["_Year_Int"] = valid_dates_df[dt_col_cmp].dt.year
-                valid_dates_df["_Month_Year_Str"] = valid_dates_df[dt_col_cmp].dt.strftime("%Y-%m")
+                valid_dates_df["_Year_Int"] = valid_dates_df[dt_col].dt.year
+                valid_dates_df["_Month_Year_Str"] = valid_dates_df[dt_col].dt.strftime("%Y-%m")
                 
                 avail_years = sorted(valid_dates_df["_Year_Int"].unique(), reverse=True)
                 avail_months = sorted(valid_dates_df["_Month_Year_Str"].unique(), reverse=True)
@@ -1161,12 +830,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                     key="cmp_granularity"
                 )
                 
-                cmp_dim = c_dim.selectbox(
-                    "Dimension to Compare:",
-                    ordered_cat_cols,
-                    index=0,
-                    key="cmp_dim"
-                )
+                cmp_dim = c_dim.selectbox("Dimension to Compare:", ordered_cat_cols, index=0, key="cmp_dim")
                 
                 metric_options = ["Play / Event Count"]
                 if "Hours Played" in df.columns:
@@ -1176,7 +840,6 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                 
                 cmp_metric = c_metric.selectbox("Metric to Compare:", metric_options, key="cmp_metric")
                 
-                # Period Selector (Up to 5)
                 if compare_mode == "Year-over-Year (Full Years)":
                     default_periods = [str(y) for y in avail_years[:min(3, len(avail_years))]]
                     chosen_periods = st.multiselect(
@@ -1188,7 +851,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                     )
                     period_col = "_Year_Int"
                     filter_vals = [int(p) for p in chosen_periods] if chosen_periods else []
-            else:
+                else:
                     default_periods = avail_months[:min(3, len(avail_months))]
                     chosen_periods = st.multiselect(
                         "Select Months to Compare (Choose 2 to 5):",
@@ -1202,8 +865,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
 
                 if len(chosen_periods) < 2:
                     st.info("💡 Please select at least 2 periods above to display comparative analytics.")
-            else:
-                    # Filter matching rows
+                else:
                     cmp_df = valid_dates_df[valid_dates_df[period_col].isin(filter_vals)].copy()
                     if exclude_unknowns:
                         cmp_df = cmp_df[~cmp_df[cmp_dim].astype(str).str.strip().str.lower().isin(
@@ -1213,18 +875,16 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                     if 'ms_played' in cmp_df.columns and min_play_sec > 0:
                         cmp_df = cmp_df[cmp_df['ms_played'] >= (min_play_sec * 1000)]
                         
-                    # Calculate values
                     cmp_df["_Period_Label"] = cmp_df[period_col].astype(str)
                     
                     if cmp_metric == "Play / Event Count":
                         agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True).size().reset_index(name="Value")
                     elif cmp_metric == "Total Hours Played":
                         agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True)["Hours Played"].sum().round(2).reset_index(name="Value")
-            else:
+                    else:
                         num_f = cmp_metric.replace("Sum of ", "")
                         agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True)[num_f].sum().round(2).reset_index(name="Value")
                     
-                    # Top items overall across these periods
                     top_overall = (
                         agg_res.groupby(cmp_dim, observed=True)["Value"].sum()
                         .sort_values(ascending=False)
@@ -1232,43 +892,42 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                         .index.tolist()
                     )
                     
-                    plot_cmp = agg_res[agg_res[cmp_dim].isin(top_overall)].copy()
-                    plot_cmp[cmp_dim] = pd.Categorical(plot_cmp[cmp_dim], categories=top_overall[::-1], ordered=True)
-                    plot_cmp = plot_cmp.sort_values([cmp_dim, "_Period_Label"])
-                    
-                    # Grouped Bar Chart
-                    fig_cmp = px.bar(
-                        plot_cmp,
-                        x="Value",
-                        y=cmp_dim,
-                        color="_Period_Label",
-                        barmode="group",
-                        orientation="h",
-                        title=f"Top 15 {cmp_dim}s: Period Comparison ({cmp_metric})",
-                        labels={"_Period_Label": "Period", "Value": cmp_metric},
-                        color_discrete_sequence=px.colors.qualitative.Plotly
-                    )
-                    fig_cmp.update_layout(
-                        paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                        yaxis=dict(automargin=True, showgrid=show_gridlines, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)"),
-                        xaxis=dict(automargin=True, showgrid=show_gridlines, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", color=chart_text),
-                        margin=dict(l=150, r=40, t=50, b=50),
-                        height=max(500, len(top_overall) * 36),
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                    )
-                    st.plotly_chart(fig_cmp, use_container_width=True, config={"responsive": True})
-                    
-                    # Comparative Matrix Table
-                    pivot_cmp = agg_res.pivot_table(index=cmp_dim, columns="_Period_Label", values="Value", fill_value=0)
-                    pivot_cmp["Total"] = pivot_cmp.sum(axis=1)
-                    pivot_cmp = pivot_cmp.sort_values(by="Total", ascending=False).drop(columns=["Total"])
-                    
-                    with st.expander("📋 View Side-by-Side Comparison Table", expanded=False):
-                        st.dataframe(pivot_cmp.head(100), use_container_width=True)
-                    
-                    render_export_bar(fig_cmp, pivot_cmp.reset_index(), "date_comparison_export", total_rows=len(top_overall))
+                    if top_overall:
+                        plot_cmp = agg_res[agg_res[cmp_dim].isin(top_overall)].copy()
+                        plot_cmp[cmp_dim] = pd.Categorical(plot_cmp[cmp_dim], categories=top_overall[::-1], ordered=True)
+                        plot_cmp = plot_cmp.sort_values([cmp_dim, "_Period_Label"])
+                        
+                        fig_cmp = px.bar(
+                            plot_cmp,
+                            x="Value",
+                            y=cmp_dim,
+                            color="_Period_Label",
+                            barmode="group",
+                            orientation="h",
+                            title=f"Top 15 {cmp_dim}s: Period Comparison ({cmp_metric})",
+                            labels={"_Period_Label": "Period", "Value": cmp_metric},
+                            color_discrete_sequence=px.colors.qualitative.Plotly
+                        )
+                        fig_cmp.update_layout(
+                            paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                            yaxis=dict(automargin=True, showgrid=show_gridlines, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)"),
+                            xaxis=dict(automargin=True, showgrid=show_gridlines, gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", color=chart_text),
+                            margin=dict(l=150, r=40, t=50, b=50),
+                            height=max(500, len(top_overall) * 36),
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+                        st.plotly_chart(fig_cmp, use_container_width=True, config={"responsive": True})
+                        
+                        pivot_cmp = agg_res.pivot_table(index=cmp_dim, columns="_Period_Label", values="Value", fill_value=0)
+                        pivot_cmp["Total"] = pivot_cmp.sum(axis=1)
+                        pivot_cmp = pivot_cmp.sort_values(by="Total", ascending=False).drop(columns=["Total"])
+                        
+                        with st.expander("📋 View Side-by-Side Comparison Table", expanded=False):
+                            st.dataframe(pivot_cmp.head(100), use_container_width=True)
+                        
+                        render_export_bar(fig_cmp, pivot_cmp.reset_index(), "date_comparison_export", total_rows=len(top_overall))
 
-        # --- TAB 3: TEMPORAL TRENDS ---
+    # --- TAB 3: TIME TRENDS ---
     with t_temporal:
         st.subheader("Time Series Trends")
         if not has_datetime:
@@ -1291,10 +950,6 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                     st.stop()
                 filtered_t_df = date_filtered_t[date_filtered_t[target_tdim].astype(str).isin(selected_tvals)]
 
-            days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-            # Full width trend layout
-            
-            # Monthly trend chart
             if 1 < filtered_t_df[target_tdim].nunique() <= 10:
                 monthly = filtered_t_df.groupby(['Month_Year', target_tdim], observed=True).size().reset_index(name="Volume")
                 fig_m = px.line(monthly, x='Month_Year', y='Volume', color=target_tdim, markers=True, title=f"Monthly Trend by {target_tdim}")
@@ -1308,29 +963,9 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                 yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
                 margin=dict(l=60, r=40, t=50, b=50),
                 autosize=True
-                )
+            )
             st.plotly_chart(fig_m, use_container_width=True, config={'responsive': True})
             render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
-
-            with c_dw:
-            if 1 < filtered_t_df[target_tdim].nunique() <= 8:
-                dw_agg = filtered_t_df.groupby(['Day_of_Week', target_tdim], observed=True).size().reset_index(name="Volume")
-                fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', color=target_tdim, barmode='group', text='Volume' if show_bar_labels else None, title=f"Day of Week by {target_tdim}")
-            else:
-                dw_agg = filtered_t_df.groupby('Day_of_Week', observed=True).size().reindex(days_order).fillna(0).reset_index(name="Volume")
-                fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', title="Day of Week Distribution", color='Volume', text='Volume' if show_bar_labels else None, color_continuous_scale=selected_palette)
-                
-                if show_bar_labels:
-                fig_dw.update_traces(textposition='outside', cliponaxis=False)
-                fig_dw.update_layout(
-                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
-                yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-                margin=dict(l=60, r=40, t=50, b=50),
-                autosize=True
-                )
-              st.plotly_chart(fig_dw, use_container_width=True, config={'responsive': True})
-              render_export_bar(fig_dw, dw_agg, "dow_activity", total_rows=10)
 
     # --- TAB 4: HEATMAPS ---
     with t_heatmap:
@@ -1380,7 +1015,6 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                 if x_field == "Day_of_Week":
                     pivot = pivot.reindex(columns=[d for d in days_order if d in pivot.columns])
 
-                # WCAG 1.4.1: Render numeric counts directly on tiles to avoid color-only information conveyance
                 fig_heat = px.imshow(
                     pivot, labels=dict(x=x_axis_choice, y=y_axis_choice, color="Events"),
                     aspect="auto", color_continuous_scale=selected_palette, title=f"Activity Heatmap ({y_axis_choice} vs {x_axis_choice})",
@@ -1395,90 +1029,16 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                 st.plotly_chart(fig_heat, use_container_width=True, config={'responsive': True})
                 render_export_bar(fig_heat, pivot.reset_index(), "heatmap_export", total_rows=len(pivot))
 
-    # --- TAB 5: CATALOG & RANKINGS ---
-    with t_catalog:
-        st.subheader("Global Leaderboard & Catalog")
-        target_catalog = st.selectbox(
-            "Entity to Inspect:", 
-            ordered_cat_cols, 
-            index=0, 
-            key="cat_picker",
-            help="Select entity type (Artist, Track, Album, Country) to populate the master sorted ranking catalog."
-        )
-        
-        catalog_mask = np.ones(len(df), dtype=bool)
-        if 'ms_played' in df.columns and min_play_sec > 0:
-            catalog_mask &= (df['ms_played'] >= (min_play_sec * 1000)).to_numpy()
-        
-        if exclude_unknowns:
-            catalog_mask &= ~df[target_catalog].astype(str).str.strip().str.lower().isin(
-                ['unknown', 'unknown artist', 'unknown track', 'unknown album', 'none', 'nan', '']
-            ).to_numpy()
-
-        catalog_source_df = df[catalog_mask]
-
-        agg_dict = {'Count': (target_catalog, 'count')}
-        if 'Hours Played' in catalog_source_df.columns:
-            agg_dict['Total Hours'] = ('Hours Played', 'sum')
-
-        catalog_df = catalog_source_df.groupby(target_catalog, observed=True).agg(**agg_dict).reset_index()
-        is_ascending_sort = ("Lowest" in ranking_direction)
-
-        if 'Total Hours' in catalog_df.columns:
-            catalog_df['Total Hours'] = catalog_df['Total Hours'].round(2)
-            catalog_df = catalog_df.sort_values(by='Total Hours', ascending=is_ascending_sort)
-        else:
-            catalog_df = catalog_df.sort_values(by='Count', ascending=is_ascending_sort)
-
-        c_search, c_page_size = st.columns([3, 1])
-        search_query = c_search.text_input(
-            f"Search {target_catalog}s (Press Enter):",
-            placeholder="Type to filter rows instantly...",
-            key=f"search_{target_catalog}"
-        )
-        page_size = c_page_size.selectbox("Rows per page:", [50, 100, 250], index=0)
-
-        filtered_catalog = catalog_df
-        if search_query.strip():
-            safe_query = re.escape(search_query.strip())
-            filtered_catalog = catalog_df[
-                catalog_df[target_catalog].astype(str).str.contains(safe_query, case=False, na=False)
-            ]
-
-        total_matches = len(filtered_catalog)
-        total_pages = max(1, (total_matches - 1) // page_size + 1)
-
-        c_page_num, c_status = st.columns([1, 3])
-        page_num = c_page_num.number_input("Page:", min_value=1, max_value=total_pages, value=1, step=1)
-        start_idx = (page_num - 1) * page_size
-        end_idx = min(start_idx + page_size, total_matches)
-
-        c_status.markdown(
-            f"<div style='margin-top: 32px; font-size: 13px; color: #94A3B8;'>"
-            f"Showing rows <b>{start_idx + 1 if total_matches > 0 else 0}–{end_idx:,}</b> of <b>{total_matches:,}</b> items"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-
-        st.dataframe(filtered_catalog.iloc[start_idx:end_idx], use_container_width=True, hide_index=True)
-        
-        clean_export_name = target_catalog.lower().replace(' ', '_').replace('(', '').replace(')', '')
-        st.download_button(
-            f"📥 Download Full {target_catalog} Catalog (CSV)",
-            sanitize_csv_data(filtered_catalog), 
-            f"{clean_export_name}_catalog.csv", 
-            "text/csv",
-            key=f"dl_{clean_export_name}",
-            help="Download the filtered catalog table as a sanitized CSV file."
-        )
-
-    with st.expander("📄 View Ingested Raw Data Table", expanded=False):
-        st.caption(f"Displaying {len(df):,} cleaned rows.")
-        st.dataframe(df.head(1000), use_container_width=True, hide_index=True)
-        st.download_button(
-            "📥 Download Ingested Dataset (CSV)",
-            df.to_csv(index=False).encode('utf-8'),
-            "cleaned_streaming_history.csv",
-            "text/csv",
-            key="dl_clean_history"
-        )
+# ---------------------------------------------------------
+# RAW DATA INSPECTION DRAWER
+# ---------------------------------------------------------
+with st.expander("📄 View Ingested Raw Data Table", expanded=False):
+    st.caption(f"Displaying {len(df):,} cleaned rows.")
+    st.dataframe(df.head(1000), use_container_width=True, hide_index=True)
+    st.download_button(
+        "📥 Download Ingested Dataset (CSV)",
+        sanitize_csv_data(df),
+        "cleaned_streaming_history.csv",
+        "text/csv",
+        key="dl_clean_history"
+    )
