@@ -636,7 +636,7 @@ def parse_and_standardize_session(uploaded_files, gsheet_url=None, is_music=True
                     val_sample = df[col].dropna()
                     unit = 'ms' if not val_sample.empty and val_sample.iloc[0] > 1e11 else 's'
                     p = pd.to_datetime(df[col], unit=unit, errors='coerce')
-                else:
+            else:
                     p = pd.to_datetime(df[col], errors='coerce')
                 
                 if p.notna().sum() > 0.5 * len(df):
@@ -1027,7 +1027,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                         key="b_date_side",
                         help="Restrict the bar chart analysis to plays within this calendar window."
                     )
-                else:
+            else:
                     top_n = chosen_top_n
                     start_d, end_d = st.slider(
                         "📅 Date Range Selection:", 
@@ -1049,7 +1049,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                         key="b_top_solo",
                         help="Adjust how many ranked entries appear on the chart."
                     )
-                else:
+            else:
                     top_n = chosen_top_n
                     direction_label = "Bottom" if "Lowest" in ranking_direction else "Top"
                     st.markdown(f"<div style='margin-top: 26px; font-size: 14px; color: #94A3B8;'><b>Preset Active:</b> Showing {direction_label.lower()} {top_n} {group_col}s</div>", unsafe_allow_html=True)
@@ -1188,7 +1188,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                     )
                     period_col = "_Year_Int"
                     filter_vals = [int(p) for p in chosen_periods] if chosen_periods else []
-                else:
+            else:
                     default_periods = avail_months[:min(3, len(avail_months))]
                     chosen_periods = st.multiselect(
                         "Select Months to Compare (Choose 2 to 5):",
@@ -1202,7 +1202,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
 
                 if len(chosen_periods) < 2:
                     st.info("💡 Please select at least 2 periods above to display comparative analytics.")
-                else:
+            else:
                     # Filter matching rows
                     cmp_df = valid_dates_df[valid_dates_df[period_col].isin(filter_vals)].copy()
                     if exclude_unknowns:
@@ -1220,7 +1220,7 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
                         agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True).size().reset_index(name="Value")
                     elif cmp_metric == "Total Hours Played":
                         agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True)["Hours Played"].sum().round(2).reset_index(name="Value")
-                    else:
+            else:
                         num_f = cmp_metric.replace("Sum of ", "")
                         agg_res = cmp_df.groupby(["_Period_Label", cmp_dim], observed=True)[num_f].sum().round(2).reset_index(name="Value")
                     
@@ -1295,28 +1295,28 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             # Full width trend layout
             
             # Monthly trend chart
-                if 1 < filtered_t_df[target_tdim].nunique() <= 10:
+            if 1 < filtered_t_df[target_tdim].nunique() <= 10:
                 monthly = filtered_t_df.groupby(['Month_Year', target_tdim], observed=True).size().reset_index(name="Volume")
                 fig_m = px.line(monthly, x='Month_Year', y='Volume', color=target_tdim, markers=True, title=f"Monthly Trend by {target_tdim}")
-                else:
+            else:
                 monthly = filtered_t_df.groupby('Month_Year', observed=True).size().reset_index(name="Volume")
                 fig_m = px.line(monthly, x='Month_Year', y='Volume', markers=True, title="Monthly Activity Volume")
                 
-                fig_m.update_layout(
+            fig_m.update_layout(
                 paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
                 xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
                 yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
                 margin=dict(l=60, r=40, t=50, b=50),
                 autosize=True
                 )
-              st.plotly_chart(fig_m, use_container_width=True, config={'responsive': True})
-              render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
+            st.plotly_chart(fig_m, use_container_width=True, config={'responsive': True})
+            render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
 
             with c_dw:
-                if 1 < filtered_t_df[target_tdim].nunique() <= 8:
+            if 1 < filtered_t_df[target_tdim].nunique() <= 8:
                 dw_agg = filtered_t_df.groupby(['Day_of_Week', target_tdim], observed=True).size().reset_index(name="Volume")
                 fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', color=target_tdim, barmode='group', text='Volume' if show_bar_labels else None, title=f"Day of Week by {target_tdim}")
-                else:
+            else:
                 dw_agg = filtered_t_df.groupby('Day_of_Week', observed=True).size().reindex(days_order).fillna(0).reset_index(name="Volume")
                 fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', title="Day of Week Distribution", color='Volume', text='Volume' if show_bar_labels else None, color_continuous_scale=selected_palette)
                 
