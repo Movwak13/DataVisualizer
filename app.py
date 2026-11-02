@@ -1296,41 +1296,41 @@ with st.expander("📊 Interactive Visualizations & Analysis", expanded=True):
             
             # Monthly trend chart
                 if 1 < filtered_t_df[target_tdim].nunique() <= 10:
-                    monthly = filtered_t_df.groupby(['Month_Year', target_tdim], observed=True).size().reset_index(name="Volume")
-                    fig_m = px.line(monthly, x='Month_Year', y='Volume', color=target_tdim, markers=True, title=f"Monthly Trend by {target_tdim}")
+                monthly = filtered_t_df.groupby(['Month_Year', target_tdim], observed=True).size().reset_index(name="Volume")
+                fig_m = px.line(monthly, x='Month_Year', y='Volume', color=target_tdim, markers=True, title=f"Monthly Trend by {target_tdim}")
                 else:
-                    monthly = filtered_t_df.groupby('Month_Year', observed=True).size().reset_index(name="Volume")
-                    fig_m = px.line(monthly, x='Month_Year', y='Volume', markers=True, title="Monthly Activity Volume")
+                monthly = filtered_t_df.groupby('Month_Year', observed=True).size().reset_index(name="Volume")
+                fig_m = px.line(monthly, x='Month_Year', y='Volume', markers=True, title="Monthly Activity Volume")
                 
                 fig_m.update_layout(
-                    paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                    xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
-                    yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-                    margin=dict(l=60, r=40, t=50, b=50),
-                    autosize=True
+                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
+                yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
+                margin=dict(l=60, r=40, t=50, b=50),
+                autosize=True
                 )
-                st.plotly_chart(fig_m, use_container_width=True, config={'responsive': True})
-                render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
+              st.plotly_chart(fig_m, use_container_width=True, config={'responsive': True})
+              render_export_bar(fig_m, monthly, "monthly_activity", total_rows=20)
 
             with c_dw:
                 if 1 < filtered_t_df[target_tdim].nunique() <= 8:
-                    dw_agg = filtered_t_df.groupby(['Day_of_Week', target_tdim], observed=True).size().reset_index(name="Volume")
-                    fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', color=target_tdim, barmode='group', text='Volume' if show_bar_labels else None, title=f"Day of Week by {target_tdim}")
+                dw_agg = filtered_t_df.groupby(['Day_of_Week', target_tdim], observed=True).size().reset_index(name="Volume")
+                fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', color=target_tdim, barmode='group', text='Volume' if show_bar_labels else None, title=f"Day of Week by {target_tdim}")
                 else:
-                    dw_agg = filtered_t_df.groupby('Day_of_Week', observed=True).size().reindex(days_order).fillna(0).reset_index(name="Volume")
-                    fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', title="Day of Week Distribution", color='Volume', text='Volume' if show_bar_labels else None, color_continuous_scale=selected_palette)
+                dw_agg = filtered_t_df.groupby('Day_of_Week', observed=True).size().reindex(days_order).fillna(0).reset_index(name="Volume")
+                fig_dw = px.bar(dw_agg, x='Day_of_Week', y='Volume', title="Day of Week Distribution", color='Volume', text='Volume' if show_bar_labels else None, color_continuous_scale=selected_palette)
                 
                 if show_bar_labels:
-                    fig_dw.update_traces(textposition='outside', cliponaxis=False)
+                fig_dw.update_traces(textposition='outside', cliponaxis=False)
                 fig_dw.update_layout(
-                    paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
-                    xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
-                    yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
-                    margin=dict(l=60, r=40, t=50, b=50),
-                    autosize=True
+                paper_bgcolor=chart_bg, plot_bgcolor=chart_bg, font=dict(color=chart_text),
+                xaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text), 
+                yaxis=dict(gridcolor=chart_grid if show_gridlines else "rgba(0,0,0,0)", showgrid=show_gridlines, color=chart_text),
+                margin=dict(l=60, r=40, t=50, b=50),
+                autosize=True
                 )
-                st.plotly_chart(fig_dw, use_container_width=True, config={'responsive': True})
-                render_export_bar(fig_dw, dw_agg, "dow_activity", total_rows=10)
+              st.plotly_chart(fig_dw, use_container_width=True, config={'responsive': True})
+              render_export_bar(fig_dw, dw_agg, "dow_activity", total_rows=10)
 
     # --- TAB 4: HEATMAPS ---
     with t_heatmap:
